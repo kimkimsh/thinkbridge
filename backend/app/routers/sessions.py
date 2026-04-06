@@ -403,6 +403,9 @@ async def sendMessage(
     tUserMessage.mTurnNumber = tNewTurnNumber
 
     db.add(tUserMessage)
+
+    # 턴 카운트를 즉시 업데이트 (게스트 턴 제한 레이스 조건 방지)
+    tSession.mTotalTurns = tNewTurnNumber
     await db.flush()
 
     # 4. 세션 히스토리 구축 (기존 메시지들)
@@ -414,7 +417,18 @@ async def sendMessage(
 
     # 6. 힌트 요청 처리 + 정체 감지 컨텍스트 결합
     tActualContent = request.content
-    if tIsStuck:
+
+    # 힌트 요청 감지: [힌트 요청] 접두사를 제거하고 힌트 컨텍스트 추가
+    tIsHintRequest = tActualContent.startswith(HINT_REQUEST_PREFIX)
+    if tIsHintRequest:
+        tActualContent = tActualContent[len(HINT_REQUEST_PREFIX):].strip()
+        tActualContent = f"{STUCK_DETECTION_INSTRUCTION}\n\n{tActualContent}"
+        logger.info(
+            "Hint request detected for session %d (turn %d)",
+            sessionId, tNewTurnNumber
+        )
+
+    if tIsStuck and not tIsHintRequest:
         tActualContent = f"{STUCK_DETECTION_INSTRUCTION}\n\n{tActualContent}"
         logger.info(
             "Stuck detection triggered for session %d (turn %d)",
@@ -575,14 +589,7 @@ async def _saveAiResponseToDb(
 
                 tDb.add(tUsage)
 
-            # 세션 총 턴 수 업데이트
-            tSessionResult = await tDb.execute(
-                select(TutoringSession).where(TutoringSession.mId == sessionId)
-            )
-            tSession = tSessionResult.scalar_one_or_none()
-            if tSession is not None:
-                tSession.mTotalTurns = turnNumber
-
+            # 세션 총 턴 수는 사용자 메시지 저장 시 이미 업데이트됨 (sendMessage에서)
             await tDb.commit()
             logger.info(
                 "Saved AI response for session %d, turn %d",
