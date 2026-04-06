@@ -61,8 +61,8 @@ from app.routers import reports
 app.include_router(reports.router, prefix="/api", tags=["reports"])
 from app.routers import dashboard
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
-# from app.routers import admin
-# app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+from app.routers import admin
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 
 @app.get("/health")

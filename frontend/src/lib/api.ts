@@ -17,6 +17,9 @@ import type {
     HeatmapResponse,
     SSEEvent,
     ThoughtAnalysis,
+    AdminStats,
+    AdminClassComparison,
+    AdminSubjectRadar,
 } from "@/types";
 
 
@@ -412,4 +415,31 @@ export function getClassStudents(classId: number, token: string): Promise<Studen
 export function getClassHeatmap(classId: number, token: string): Promise<HeatmapResponse>
 {
     return apiRequest<HeatmapResponse>(`/api/dashboard/classes/${classId}/heatmap`, { token });
+}
+
+
+// --- Admin Dashboard API ---
+
+/**
+ * 관리자 전체 통계 조회 - 총 학생, 총 세션, 평균 점수, 활성률
+ */
+export function getAdminStats(token: string): Promise<AdminStats>
+{
+    return apiRequest<AdminStats>("/api/admin/stats", { token });
+}
+
+/**
+ * 반별 6차원 사고력 비교 데이터 조회 - BarChart용
+ */
+export function getAdminClasses(token: string): Promise<AdminClassComparison[]>
+{
+    return apiRequest<AdminClassComparison[]>("/api/admin/classes", { token });
+}
+
+/**
+ * 과목별 6차원 레이더 데이터 조회 - RadarChart overlay용
+ */
+export function getAdminSubjects(token: string): Promise<AdminSubjectRadar[]>
+{
+    return apiRequest<AdminSubjectRadar[]>("/api/admin/subjects", { token });
 }

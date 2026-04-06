@@ -27,6 +27,11 @@ from app.schemas.report import (
     HeatmapResponse,
     ClassSummary,
 )
+from app.schemas.admin import (
+    AdminStats,
+    AdminClassComparison,
+    AdminSubjectRadar,
+)
 
 __all__ = [
     # User schemas
@@ -51,4 +56,8 @@ __all__ = [
     "HeatmapEntry",
     "HeatmapResponse",
     "ClassSummary",
+    # Admin schemas
+    "AdminStats",
+    "AdminClassComparison",
+    "AdminSubjectRadar",
 ]
