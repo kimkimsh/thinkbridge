@@ -8,6 +8,10 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.config import settings
 from app.database import engine, Base
+from app.models import (  # noqa: F401 — import to register models with Base.metadata
+    User, ClassRoom, Enrollment, TutoringSession,
+    Message, ThoughtAnalysis, Report, TokenUsage,
+)
 
 
 SSE_TEST_EVENT_COUNT = 5
