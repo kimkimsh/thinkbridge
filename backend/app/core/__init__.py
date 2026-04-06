@@ -6,10 +6,18 @@ from app.core.security import (
     createAccessToken,
     getCurrentUser,
 )
+from app.core.prompts import (
+    SOCRATIC_SYSTEM_PROMPT,
+    GUEST_SOCRATIC_PROMPT,
+    ANALYZE_THINKING_TOOL,
+)
 
 __all__ = [
     "hashPassword",
     "verifyPassword",
     "createAccessToken",
     "getCurrentUser",
+    "SOCRATIC_SYSTEM_PROMPT",
+    "GUEST_SOCRATIC_PROMPT",
+    "ANALYZE_THINKING_TOOL",
 ]
