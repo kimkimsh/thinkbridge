@@ -28,7 +28,9 @@ class Enrollment(Base):
     )
 
     # Relationships
-    mUser: Mapped["User"] = relationship("User", lazy="selectin")
+    mUser: Mapped["User"] = relationship(
+        "User", back_populates="mEnrollments", lazy="selectin"
+    )
     mClassRoom: Mapped["ClassRoom"] = relationship(
         "ClassRoom", back_populates="mEnrollments", lazy="selectin"
     )

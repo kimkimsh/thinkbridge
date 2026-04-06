@@ -4,7 +4,7 @@
 from app.models.user import User, UserRole
 from app.models.class_room import ClassRoom, SubjectType
 from app.models.enrollment import Enrollment
-from app.models.session import TutoringSession, SessionSubject, SessionStatus
+from app.models.session import TutoringSession, SessionStatus
 from app.models.message import Message, MessageRole
 from app.models.thought_analysis import (
     ThoughtAnalysis,
@@ -30,7 +30,6 @@ __all__ = [
     # Enums
     "UserRole",
     "SubjectType",
-    "SessionSubject",
     "SessionStatus",
     "MessageRole",
     "EngagementLevel",

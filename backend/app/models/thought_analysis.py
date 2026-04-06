@@ -1,7 +1,7 @@
 import enum
 from typing import Any
 
-from sqlalchemy import String, Integer, ForeignKey, JSON
+from sqlalchemy import String, Integer, ForeignKey, JSON, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -14,6 +14,12 @@ DIMENSION_SCORE_MAX = 10
 # 소크라테스식 5단계 범위 상수
 SOCRATIC_STAGE_MIN = 1
 SOCRATIC_STAGE_MAX = 5
+
+# DB CheckConstraint에서 사용되는 6차원 점수 컬럼 목록
+_DIMENSION_COLUMNS = [
+    "mProblemUnderstanding", "mPremiseCheck", "mLogicalStructure",
+    "mEvidenceProvision", "mCriticalThinking", "mCreativeThinking",
+]
 
 
 class EngagementLevel(str, enum.Enum):
@@ -39,6 +45,21 @@ class ThoughtAnalysis(Base):
     """
 
     __tablename__ = "thought_analyses"
+
+    # DB 레벨에서 점수 범위 강제 (0-10, 1-5)
+    __table_args__ = (
+        *(
+            CheckConstraint(
+                f'"{col}" BETWEEN {DIMENSION_SCORE_MIN} AND {DIMENSION_SCORE_MAX}',
+                name=f"ck_{col.lower()}_range",
+            )
+            for col in _DIMENSION_COLUMNS
+        ),
+        CheckConstraint(
+            f'"mSocraticStage" BETWEEN {SOCRATIC_STAGE_MIN} AND {SOCRATIC_STAGE_MAX}',
+            name="ck_socratic_stage_range",
+        ),
+    )
 
     mId: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     # 하나의 메시지에 하나의 분석만 존재 (unique constraint)

@@ -6,13 +6,7 @@ from sqlalchemy import String, Integer, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-
-
-class SessionSubject(str, enum.Enum):
-    """세션 과목 유형 - 수학, 과학, 논술"""
-    MATH = "math"
-    SCIENCE = "science"
-    ESSAY = "essay"
+from app.models.class_room import SubjectType
 
 
 class SessionStatus(str, enum.Enum):
@@ -33,7 +27,7 @@ class TutoringSession(Base):
     mUserId: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.mId"), nullable=False
     )
-    mSubject: Mapped[SessionSubject] = mapped_column(
+    mSubject: Mapped[SubjectType] = mapped_column(
         String(20), nullable=False
     )
     mTopic: Mapped[str] = mapped_column(String(255), nullable=False)

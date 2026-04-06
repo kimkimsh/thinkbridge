@@ -17,8 +17,9 @@ class Report(Base):
     __tablename__ = "reports"
 
     mId: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # 세션당 1개 리포트만 존재 (unique constraint)
     mSessionId: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tutoring_sessions.mId"), nullable=False
+        Integer, ForeignKey("tutoring_sessions.mId"), unique=True, nullable=False
     )
     # AI가 생성한 한국어 서술형 요약
     mSummary: Mapped[str] = mapped_column(Text, nullable=False)

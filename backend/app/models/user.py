@@ -51,6 +51,10 @@ class User(Base):
     mClassRooms: Mapped[list["ClassRoom"]] = relationship(
         "ClassRoom", back_populates="mInstructor", lazy="selectin"
     )
+    # 학생의 수강 등록 목록 (대시보드 쿼리용)
+    mEnrollments: Mapped[list["Enrollment"]] = relationship(
+        "Enrollment", back_populates="mUser", lazy="selectin"
+    )
 
     def __repr__(self) -> str:
         return f"<User(id={self.mId}, email={self.mEmail}, role={self.mRole})>"
