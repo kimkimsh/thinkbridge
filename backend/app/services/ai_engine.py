@@ -7,6 +7,7 @@ Single Claude API call produces:
   [tool_use block] -> analyze_thinking JSON (6-dimension analysis)
 """
 
+import copy
 import json
 import logging
 from typing import AsyncGenerator
@@ -35,6 +36,9 @@ DEFAULT_DIMENSION_SCORE = 5
 DEFAULT_SOCRATIC_STAGE = 1
 DEFAULT_ENGAGEMENT_LEVEL = "active"
 
+# 텍스트 응답이 비어있을 때 사용되는 방어적 기본 메시지
+FALLBACK_RESPONSE_TEXT = FALLBACK_RESPONSE_TEXT
+
 DEFAULT_ANALYSIS = {
     "problem_understanding": DEFAULT_DIMENSION_SCORE,
     "premise_check": DEFAULT_DIMENSION_SCORE,
@@ -46,6 +50,11 @@ DEFAULT_ANALYSIS = {
     "socratic_stage": DEFAULT_SOCRATIC_STAGE,
     "engagement_level": DEFAULT_ENGAGEMENT_LEVEL,
 }
+
+
+def _getDefaultAnalysis() -> dict:
+    """기본 분석 dict의 깊은 복사본 반환 (detected_patterns 리스트 공유 방지)"""
+    return copy.deepcopy(DEFAULT_ANALYSIS)
 
 # SSE 이벤트 타입 상수
 EVENT_TYPE_TOKEN = "token"
@@ -70,12 +79,18 @@ TOKEN_KEY_OUTPUT = "output_tokens"
 TOKEN_KEY_MODEL = "model"
 
 
-def _createClient() -> anthropic.AsyncAnthropic:
-    """Anthropic 비동기 클라이언트 생성"""
-    return anthropic.AsyncAnthropic(
-        api_key=settings.ANTHROPIC_API_KEY,
-        timeout=API_TIMEOUT_SECONDS,
-    )
+_client: anthropic.AsyncAnthropic | None = None
+
+
+def _getClient() -> anthropic.AsyncAnthropic:
+    """Anthropic 비동기 클라이언트 싱글톤 - 커넥션 풀 재사용"""
+    global _client
+    if _client is None:
+        _client = anthropic.AsyncAnthropic(
+            api_key=settings.ANTHROPIC_API_KEY,
+            timeout=API_TIMEOUT_SECONDS,
+        )
+    return _client
 
 
 def _selectSystemPrompt(isGuest: bool) -> str:
@@ -222,11 +237,11 @@ def _parseResponse(response: anthropic.types.Message) -> tuple[str, dict]:
     # Fallback stage 1: 도구 호출 없음 -> 기본 분석 사용
     if tAnalysis is None:
         logger.warning("analyze_thinking tool was not called, using default analysis")
-        tAnalysis = DEFAULT_ANALYSIS.copy()
+        tAnalysis = _getDefaultAnalysis()
 
     # 텍스트 응답이 비어있는 경우 방어
     if not tResponseText.strip():
-        tResponseText = "함께 생각해봐요. 이 문제에서 가장 먼저 확인해야 할 것은 무엇일까요?"
+        tResponseText = FALLBACK_RESPONSE_TEXT
 
     return tResponseText, tAnalysis
 
@@ -261,7 +276,7 @@ async def processTurn(
         2. JSON parse failure -> default analysis, error logged
         3. API timeout/error -> retry once, then raise
     """
-    tClient = _createClient()
+    tClient = _getClient()
     tSystemPrompt = _selectSystemPrompt(isGuest)
     tMessages = _buildMessages(sessionHistory, userMessage)
 
@@ -328,42 +343,26 @@ async def processTurnStreaming(
         2. JSON parse failure -> yield default analysis, error logged
         3. API timeout/error -> retry once, then yield error event
     """
-    tClient = _createClient()
+    # 스트리밍은 부분 데이터 전송 후 재시도 시 데이터 중복 위험이 있으므로
+    # 재시도하지 않고 즉시 에러 이벤트를 발생시킴
+    tClient = _getClient()
     tSystemPrompt = _selectSystemPrompt(isGuest)
     tMessages = _buildMessages(sessionHistory, userMessage)
 
     # 과목 정보를 시스템 프롬프트에 추가
     tFullSystemPrompt = f"{tSystemPrompt}\n\n현재 과목: {subject}"
 
-    tLastError = None
-    tAttemptCount = MAX_RETRY_COUNT + 1
+    try:
+        async for tEvent in _streamFromApi(tClient, tFullSystemPrompt, tMessages):
+            yield tEvent
 
-    for tAttempt in range(tAttemptCount):
-        try:
-            async for tEvent in _streamFromApi(tClient, tFullSystemPrompt, tMessages):
-                yield tEvent
-            # 스트리밍 성공 시 함수 종료
-            return
-
-        except anthropic.APITimeoutError as tError:
-            tLastError = tError
-            logger.warning(
-                "Claude API streaming timeout (attempt %d/%d): %s",
-                tAttempt + 1, tAttemptCount, tError
-            )
-        except anthropic.APIError as tError:
-            tLastError = tError
-            logger.warning(
-                "Claude API streaming error (attempt %d/%d): %s",
-                tAttempt + 1, tAttemptCount, tError
-            )
-
-    # Fallback stage 3: 모든 재시도 실패 -> 에러 이벤트 전송
-    logger.error("All streaming API attempts failed: %s", tLastError)
-    yield {
-        "type": EVENT_TYPE_ERROR,
-        "data": {"message": f"AI 응답 생성에 실패했습니다: {str(tLastError)}"},
-    }
+    except (anthropic.APITimeoutError, anthropic.APIError) as tError:
+        # Fallback stage 3: 스트리밍 실패 -> 에러 이벤트 전송 (재시도 없음)
+        logger.error("Claude API streaming failed: %s", tError)
+        yield {
+            "type": EVENT_TYPE_ERROR,
+            "data": {"message": f"AI 응답 생성에 실패했습니다: {str(tError)}"},
+        }
 
 
 async def _streamFromApi(
@@ -427,7 +426,7 @@ async def _streamFromApi(
                         )
                         yield {
                             "type": EVENT_TYPE_ANALYSIS,
-                            "data": DEFAULT_ANALYSIS.copy(),
+                            "data": _getDefaultAnalysis(),
                         }
                     finally:
                         tToolJsonBuffer = ""
@@ -443,14 +442,14 @@ async def _streamFromApi(
             )
             yield {
                 "type": EVENT_TYPE_ANALYSIS,
-                "data": DEFAULT_ANALYSIS.copy(),
+                "data": _getDefaultAnalysis(),
             }
 
         # 텍스트 응답이 없었던 경우 방어적 기본 메시지 전송
         if not tHasTextContent:
             yield {
                 "type": EVENT_TYPE_TOKEN,
-                "data": "함께 생각해봐요. 이 문제에서 가장 먼저 확인해야 할 것은 무엇일까요?",
+                "data": FALLBACK_RESPONSE_TEXT,
             }
 
         # 완료 이벤트 (토큰 사용량 포함)
