@@ -57,10 +57,10 @@ from app.routers import auth
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 from app.routers import sessions
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
-# from app.routers import reports
-# app.include_router(reports.router, prefix="/api", tags=["reports"])
-# from app.routers import dashboard
-# app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
+from app.routers import reports
+app.include_router(reports.router, prefix="/api", tags=["reports"])
+from app.routers import dashboard
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 # from app.routers import admin
 # app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 

@@ -658,8 +658,18 @@ async def endSession(
     await db.commit()
     await db.refresh(tSession)
 
-    # 리포트 생성은 비동기로 처리 (report_generator 구현 후 활성화 예정)
-    # TODO: Task 6에서 report_generator 구현 후 asyncio.create_task()로 호출
+    # 리포트 자동 생성 (비동기 백그라운드 처리)
+    try:
+        from app.services.report_generator import generateSessionReport
+        await generateSessionReport(sessionId=sessionId, db=db)
+        logger.info("Auto-generated report for session %d", sessionId)
+    except Exception as tReportError:
+        # 리포트 생성 실패해도 세션 종료는 성공으로 처리
+        logger.error(
+            "Failed to auto-generate report for session %d: %s",
+            sessionId, tReportError,
+        )
+
     logger.info("Session %d ended by user %d", sessionId, currentUser.mId)
 
     return _buildSessionResponse(tSession)

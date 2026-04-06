@@ -24,6 +24,8 @@ from app.schemas.report import (
     GrowthTrendEntry,
     StudentSummary,
     HeatmapEntry,
+    HeatmapResponse,
+    ClassSummary,
 )
 
 __all__ = [
@@ -47,4 +49,6 @@ __all__ = [
     "GrowthTrendEntry",
     "StudentSummary",
     "HeatmapEntry",
+    "HeatmapResponse",
+    "ClassSummary",
 ]

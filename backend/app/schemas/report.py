@@ -56,3 +56,25 @@ class HeatmapEntry(BaseModel):
     studentId: int
     studentName: str
     scores: dict[str, float]
+
+
+class HeatmapResponse(BaseModel):
+    """
+    히트맵 응답 - 학생별 6차원 점수 매트릭스 + AI 인사이트 텍스트
+    Heatmap data with programmatic AI insight for instructor dashboard.
+    """
+
+    entries: list[HeatmapEntry]
+    insight: str
+
+
+class ClassSummary(BaseModel):
+    """
+    교실 요약 정보 - 강사 대시보드의 교실 목록용
+    Classroom summary for instructor dashboard class list.
+    """
+
+    id: int
+    name: str
+    subject: str
+    studentCount: int
