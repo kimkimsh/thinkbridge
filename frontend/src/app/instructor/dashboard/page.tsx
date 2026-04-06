@@ -149,7 +149,7 @@ export default function InstructorDashboardPage()
     if (mIsLoadingClasses)
     {
         return (
-            <div className="space-y-6 p-6">
+            <div className="space-y-6 p-4 sm:p-6">
                 <div className="h-7 w-48 animate-pulse rounded bg-gray-200" />
                 <div className="h-10 w-64 animate-pulse rounded bg-gray-200" />
                 <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

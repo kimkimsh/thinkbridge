@@ -82,8 +82,8 @@ export function HeatmapChart({ data }: HeatmapChartProps)
             </CardHeader>
             <CardContent className="space-y-4">
                 {/* Heatmap table */}
-                <div className="overflow-x-auto">
-                    <table className="w-full border-collapse text-xs">
+                <div className="overflow-x-auto -mx-2 px-2">
+                    <table className="w-full min-w-[480px] border-collapse text-xs">
                         <thead>
                             <tr>
                                 <th className="sticky left-0 z-10 bg-white px-3 py-2 text-left font-medium text-gray-600">

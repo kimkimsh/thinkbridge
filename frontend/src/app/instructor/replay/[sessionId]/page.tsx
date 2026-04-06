@@ -186,9 +186,9 @@ export default function InstructorReplayPage()
         return (
             <div className="space-y-4 p-6">
                 <div className="h-8 w-48 animate-pulse rounded bg-gray-200" />
-                <div className="flex gap-4">
-                    <div className="h-96 w-64 animate-pulse rounded-xl bg-gray-200" />
-                    <div className="h-96 flex-1 animate-pulse rounded-xl bg-gray-200" />
+                <div className="flex flex-col gap-4 md:flex-row">
+                    <div className="h-32 animate-pulse rounded-xl bg-gray-200 md:h-96 md:w-64" />
+                    <div className="h-64 flex-1 animate-pulse rounded-xl bg-gray-200 md:h-96" />
                     <div className="hidden h-96 w-80 animate-pulse rounded-xl bg-gray-200 lg:block" />
                 </div>
             </div>
@@ -219,9 +219,9 @@ export default function InstructorReplayPage()
                 </div>
             )}
 
-            <div className="flex min-h-0 flex-1 gap-4">
-                {/* 왼쪽: 세션 목록 */}
-                <div className="w-56 shrink-0 lg:w-64">
+            <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
+                {/* 왼쪽: 세션 목록 (mobile: horizontal scroll, desktop: sidebar) */}
+                <div className="shrink-0 md:w-56 lg:w-64">
                     <Card className="h-full">
                         <CardHeader className="p-3">
                             <CardTitle className="text-xs font-semibold text-gray-500">
@@ -229,7 +229,7 @@ export default function InstructorReplayPage()
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-2">
-                            <ScrollArea className="h-[calc(100vh-14rem)]">
+                            <ScrollArea className="h-32 md:h-[calc(100vh-14rem)]">
                                 {mSessionEntries.length === 0 ? (
                                     <p className="px-2 py-4 text-center text-xs text-muted-foreground">
                                         {NO_SESSIONS_TEXT}
@@ -308,7 +308,7 @@ export default function InstructorReplayPage()
 
                                 {/* 메시지 목록 */}
                                 <CardContent className="p-0">
-                                    <ScrollArea className="h-[calc(100vh-16rem)]">
+                                    <ScrollArea className="h-[50vh] md:h-[calc(100vh-16rem)]">
                                         <div className="space-y-3 p-4">
                                             {mSessionDetail.messages.map((message, index) => (
                                                 <div

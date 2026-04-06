@@ -266,7 +266,7 @@ export default function AdminDashboardPage()
     const tRadarData = buildRadarData(mSubjects);
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 p-4 sm:p-6">
             {/* 페이지 제목 */}
             <h1 className="text-xl font-bold text-gray-900">
                 {PAGE_TITLE}
@@ -322,11 +322,12 @@ export default function AdminDashboardPage()
             {/* 반별 사고력 비교 BarChart */}
             {tBarChartData.length > 0 && (
                 <Card>
-                    <CardContent className="p-6">
+                    <CardContent className="p-4 sm:p-6">
                         <h2 className="mb-4 text-lg font-semibold text-gray-900">
                             {BAR_CHART_TITLE}
                         </h2>
-                        <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT}>
+                        <div className="overflow-x-auto -mx-2 px-2">
+                        <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT} minWidth={400}>
                             <BarChart
                                 data={tBarChartData}
                                 margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
@@ -355,6 +356,7 @@ export default function AdminDashboardPage()
                                 ))}
                             </BarChart>
                         </ResponsiveContainer>
+                        </div>
                     </CardContent>
                 </Card>
             )}

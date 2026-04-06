@@ -16,10 +16,17 @@ import {
     type ChangeEvent,
 } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Lightbulb, Square, FileText } from "lucide-react";
+import { Send, Lightbulb, Square, FileText, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from "@/components/ui/sheet";
 import { ProgressBar } from "@/components/chat/ProgressBar";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ThoughtPanel } from "@/components/chat/ThoughtPanel";
@@ -488,13 +495,30 @@ export function ChatInterface({ sessionId, subject, isGuest, isDemo }: ChatInter
                 </div>
             </div>
 
-            {/* Analysis panel (mobile bottom, visible only on small screens when analysis exists) */}
+            {/* Analysis panel (mobile floating button + Sheet drawer, visible only on small screens when analysis exists) */}
             {mCurrentAnalysis && (
-                <div className="shrink-0 border-t bg-gray-50 p-3 lg:hidden">
-                    <ThoughtPanel
-                        analysis={mCurrentAnalysis}
-                        isDemo={isDemo}
-                    />
+                <div className="fixed bottom-20 right-4 z-40 lg:hidden">
+                    <Sheet>
+                        <SheetTrigger asChild>
+                            <Button
+                                size="icon"
+                                className="h-12 w-12 rounded-full bg-blue-600 shadow-lg hover:bg-blue-700"
+                            >
+                                <Brain className="h-5 w-5 text-white" />
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="bottom" className="max-h-[70vh] overflow-y-auto rounded-t-2xl px-4 pb-6 pt-4">
+                            <SheetHeader className="mb-3">
+                                <SheetTitle className="text-sm font-semibold">
+                                    사고력 분석
+                                </SheetTitle>
+                            </SheetHeader>
+                            <ThoughtPanel
+                                analysis={mCurrentAnalysis}
+                                isDemo={isDemo}
+                            />
+                        </SheetContent>
+                    </Sheet>
                 </div>
             )}
         </div>
