@@ -36,6 +36,7 @@ app = FastAPI(
 tOrigins = [
     origin.strip()
     for origin in settings.CORS_ORIGINS.split(",")
+    if origin.strip()
 ]
 
 app.add_middleware(
