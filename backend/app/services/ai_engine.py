@@ -37,7 +37,7 @@ DEFAULT_SOCRATIC_STAGE = 1
 DEFAULT_ENGAGEMENT_LEVEL = "active"
 
 # 텍스트 응답이 비어있을 때 사용되는 방어적 기본 메시지
-FALLBACK_RESPONSE_TEXT = FALLBACK_RESPONSE_TEXT
+FALLBACK_RESPONSE_TEXT = "좋은 질문이에요! 조금 더 생각해볼까요? 어떤 부분이 가장 궁금한지 말씀해주세요."
 
 DEFAULT_ANALYSIS = {
     "problem_understanding": DEFAULT_DIMENSION_SCORE,

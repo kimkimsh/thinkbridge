@@ -55,8 +55,8 @@ app.add_middleware(
 # --- Router mounting (uncomment as routers are implemented) ---
 from app.routers import auth
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-# from app.routers import sessions
-# app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
+from app.routers import sessions
+app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
 # from app.routers import reports
 # app.include_router(reports.router, prefix="/api", tags=["reports"])
 # from app.routers import dashboard
