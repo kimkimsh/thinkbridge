@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from app.schemas.message import MessageResponse
+from app.schemas.message import MessageWithAnalysis
 
 
 class SessionCreate(BaseModel):
@@ -39,4 +39,4 @@ class SessionDetail(SessionResponse):
     Session detail including all messages in the conversation.
     """
 
-    messages: list[MessageResponse] = []
+    messages: list[MessageWithAnalysis] = []

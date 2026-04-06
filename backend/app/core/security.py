@@ -99,9 +99,15 @@ async def getCurrentUser(
     except JWTError:
         raise tCredentialsException
 
+    # JWT sub 클레임이 유효한 정수인지 확인
+    try:
+        tUserIdInt = int(tUserId)
+    except (ValueError, TypeError):
+        raise tCredentialsException
+
     # DB에서 사용자 조회
     tResult = await db.execute(
-        select(User).where(User.mId == int(tUserId))
+        select(User).where(User.mId == tUserIdInt)
     )
     tUser = tResult.scalar_one_or_none()
 
