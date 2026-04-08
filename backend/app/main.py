@@ -40,11 +40,17 @@ async def lifespan(app: FastAPI):
     yield
 
 
+import os
+
+# 디버그 모드 (프로덕션에서 에러 상세 확인용 — 배포 안정화 후 제거)
+_DEBUG_MODE = os.getenv("DEBUG", "false").lower() == "true"
+
 app = FastAPI(
     title="ThinkBridge API",
     description="AI 소크라테스식 튜터링 시스템 API",
     version="0.1.0",
     lifespan=lifespan,
+    debug=_DEBUG_MODE,
 )
 
 # CORS 미들웨어 설정 - 프론트엔드 오리진 허용
@@ -99,6 +105,39 @@ async def healthCheckDb() -> dict:
         return {"db": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
     except Exception as tError:
         return {"db": "error", "detail": str(tError), "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/health/tables")
+async def healthCheckTables() -> dict:
+    """DB 테이블 존재 여부 확인"""
+    from sqlalchemy import text
+    try:
+        async with engine.begin() as conn:
+            tResult = await conn.execute(text(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = 'public' ORDER BY table_name"
+            ))
+            tTables = [row[0] for row in tResult.fetchall()]
+        return {"tables": tTables, "count": len(tTables)}
+    except Exception as tError:
+        return {"error": str(tError)}
+
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(Exception)
+async def globalExceptionHandler(request: Request, exc: Exception) -> JSONResponse:
+    """전역 예외 핸들러 — 500 에러 상세 반환 (디버깅용)"""
+    import traceback
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": str(exc),
+            "type": type(exc).__name__,
+            "traceback": traceback.format_exc() if _DEBUG_MODE else None,
+        },
+    )
 
 
 async def _generateSseTestEvents():
