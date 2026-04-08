@@ -44,7 +44,7 @@ def _buildUserResponse(user: User) -> UserResponse:
         id=user.mId,
         email=user.mEmail,
         name=user.mName,
-        role=user.mRole.value,
+        role=user.mRole.value if hasattr(user.mRole, "value") else user.mRole,
         isGuest=user.mIsGuest,
     )
 
