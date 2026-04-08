@@ -24,8 +24,15 @@ async def lifespan(app: FastAPI):
     애플리케이션 시작 시 테이블 자동 생성
     Application lifespan: create all tables on startup.
     """
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    import logging
+    tLogger = logging.getLogger(__name__)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        tLogger.info("Database tables created successfully")
+    except Exception as tError:
+        tLogger.error("Failed to create database tables: %s", tError)
+        # DB 연결 실패해도 앱은 시작 (health check는 동작해야 함)
     yield
 
 

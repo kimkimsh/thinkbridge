@@ -1,3 +1,4 @@
+import ssl
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
@@ -29,10 +30,17 @@ def _buildAsyncDatabaseUrl(databaseUrl: str) -> str:
 
 ASYNC_DATABASE_URL = _buildAsyncDatabaseUrl(settings.DATABASE_URL)
 
+# Supabase는 SSL 연결을 요구함
+# asyncpg용 SSL 컨텍스트 생성 (서버 인증서 검증 비활성화 — Supabase 자체 인증)
+_sslContext = ssl.create_default_context()
+_sslContext.check_hostname = False
+_sslContext.verify_mode = ssl.CERT_NONE
+
 engine = create_async_engine(
     ASYNC_DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
+    connect_args={"ssl": _sslContext},
 )
 
 # 비동기 세션 팩토리
