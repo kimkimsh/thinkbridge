@@ -52,6 +52,9 @@ engine = create_async_engine(
         "ssl": _sslContext,
         "timeout": DB_CONNECT_TIMEOUT,
         "command_timeout": DB_CONNECT_TIMEOUT,
+        # Supabase Pooler (Transaction mode)는 prepared statements 미지원
+        # asyncpg 캐시를 비활성화해야 호환됨
+        "prepared_statement_cache_size": 0,
     },
 )
 
