@@ -194,6 +194,15 @@ export default function StudentReportPage()
 
     const tSessionId = Number(params.id);
 
+    // NaN 검증 - 잘못된 파라미터이면 세션 목록으로 리다이렉트
+    useEffect(() =>
+    {
+        if (isNaN(tSessionId))
+        {
+            router.push("/student/sessions");
+        }
+    }, [tSessionId, router]);
+
     // 리포트 데이터 로드
     useEffect(() =>
     {

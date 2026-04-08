@@ -14,6 +14,7 @@ import {
     useCallback,
     type KeyboardEvent,
     type ChangeEvent,
+    type MutableRefObject,
 } from "react";
 import { useRouter } from "next/navigation";
 import { Send, Lightbulb, Square, FileText, Brain } from "lucide-react";
@@ -97,6 +98,13 @@ export function ChatInterface({ sessionId, subject, isGuest, isDemo }: ChatInter
     const mScrollRef = useRef<HTMLDivElement>(null);
     const mTextareaRef = useRef<HTMLTextAreaElement>(null);
 
+    /**
+     * Ref to accumulate streaming text tokens.
+     * Using a ref avoids the fragile pattern of calling setMessages
+     * inside a setStreamingText state updater callback.
+     */
+    const mStreamingTextRef: MutableRefObject<string> = useRef("");
+
     // --- Hooks ---
     const { token } = useAuth();
     const router = useRouter();
@@ -160,6 +168,7 @@ export function ChatInterface({ sessionId, subject, isGuest, isDemo }: ChatInter
         setInputValue("");
         setIsStreaming(true);
         setStreamingText("");
+        mStreamingTextRef.current = "";
 
         // Reset textarea height
         if (mTextareaRef.current)
@@ -174,8 +183,9 @@ export function ChatInterface({ sessionId, subject, isGuest, isDemo }: ChatInter
             {
                 if (tEvent.type === "token")
                 {
-                    // Append token character by character
-                    setStreamingText((prev) => prev + tEvent.data);
+                    // Accumulate token in ref and sync to display state
+                    mStreamingTextRef.current += tEvent.data;
+                    setStreamingText(mStreamingTextRef.current);
                 }
                 else if (tEvent.type === "analysis")
                 {
@@ -185,19 +195,21 @@ export function ChatInterface({ sessionId, subject, isGuest, isDemo }: ChatInter
                 }
                 else if (tEvent.type === "done")
                 {
-                    // Finalize: move streaming text into messages array
-                    setStreamingText((prev) =>
+                    // Finalize: read accumulated text from ref and add to messages
+                    const tAccumulatedText = mStreamingTextRef.current;
+
+                    if (tAccumulatedText.length > 0)
                     {
-                        if (prev.length > 0)
-                        {
-                            const tAssistantMessage: ChatMessage = {
-                                role: "assistant",
-                                content: prev,
-                            };
-                            setMessages((prevMessages) => [...prevMessages, tAssistantMessage]);
-                        }
-                        return "";
-                    });
+                        const tAssistantMessage: ChatMessage = {
+                            role: "assistant",
+                            content: tAccumulatedText,
+                        };
+                        setMessages((prevMessages) => [...prevMessages, tAssistantMessage]);
+                    }
+
+                    // Clear streaming state
+                    mStreamingTextRef.current = "";
+                    setStreamingText("");
                     setTurnCount((prev) => prev + 1);
                 }
                 else if (tEvent.type === "error")
@@ -209,18 +221,20 @@ export function ChatInterface({ sessionId, subject, isGuest, isDemo }: ChatInter
         catch (error)
         {
             // Finalize any partial streaming text on error
-            setStreamingText((prev) =>
+            const tPartialText = mStreamingTextRef.current;
+
+            if (tPartialText.length > 0)
             {
-                if (prev.length > 0)
-                {
-                    const tPartialMessage: ChatMessage = {
-                        role: "assistant",
-                        content: prev,
-                    };
-                    setMessages((prevMessages) => [...prevMessages, tPartialMessage]);
-                }
-                return "";
-            });
+                const tPartialMessage: ChatMessage = {
+                    role: "assistant",
+                    content: tPartialText,
+                };
+                setMessages((prevMessages) => [...prevMessages, tPartialMessage]);
+            }
+
+            // Clear streaming state
+            mStreamingTextRef.current = "";
+            setStreamingText("");
 
             const tErrorMsg = error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
             setErrorMessage(tErrorMsg);

@@ -51,6 +51,15 @@ export default function InstructorReplayPage()
     // Route param is student ID (named sessionId in the route structure)
     const mStudentId = Number(params.sessionId);
 
+    // NaN 검증 - 잘못된 파라미터이면 대시보드로 리다이렉트
+    useEffect(() =>
+    {
+        if (isNaN(mStudentId))
+        {
+            router.push("/instructor/dashboard");
+        }
+    }, [mStudentId, router]);
+
     const [mSessionEntries, setSessionEntries] = useState<GrowthTrendEntry[]>([]);
     const [mSelectedSessionId, setSelectedSessionId] = useState<number | null>(null);
     const [mSessionDetail, setSessionDetail] = useState<SessionDetail | null>(null);
