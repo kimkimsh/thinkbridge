@@ -1,6 +1,10 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+
+# 메시지 내용 최대 길이
+MAX_MESSAGE_CONTENT_LENGTH = 5000
 
 
 class MessageCreate(BaseModel):
@@ -9,7 +13,7 @@ class MessageCreate(BaseModel):
     Student message input for a tutoring session turn.
     """
 
-    content: str
+    content: str = Field(..., min_length=1, max_length=MAX_MESSAGE_CONTENT_LENGTH)
 
 
 class ThoughtAnalysisResponse(BaseModel):

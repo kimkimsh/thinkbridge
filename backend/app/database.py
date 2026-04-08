@@ -62,7 +62,11 @@ def _disablePreparedStatementCache(dbapi_connection, connection_record):
     connect_args의 statement_cache_size=0이 dialect 초기화에 적용되지 않는
     문제를 우회하기 위해 raw connection 레벨에서 캐시를 직접 제거.
     """
-    raw_conn = dbapi_connection.dbapi_connection
+    # SQLAlchemy 2.0+: driver_connection replaces deprecated dbapi_connection
+    raw_conn = getattr(
+        dbapi_connection, "driver_connection",
+        getattr(dbapi_connection, "dbapi_connection", None),
+    )
     if hasattr(raw_conn, "_stmt_cache"):
         raw_conn._stmt_cache.clear()
     if hasattr(raw_conn, "_stmts_to_close"):

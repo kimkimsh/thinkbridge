@@ -1,8 +1,12 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.message import MessageWithAnalysis
+
+
+# 주제 최대 길이 (DB 컬럼 String(255)에 맞춤)
+MAX_TOPIC_LENGTH = 255
 
 
 class SessionCreate(BaseModel):
@@ -12,7 +16,7 @@ class SessionCreate(BaseModel):
     """
 
     subject: str
-    topic: str
+    topic: str = Field(..., min_length=1, max_length=MAX_TOPIC_LENGTH)
 
 
 class SessionResponse(BaseModel):
