@@ -36,24 +36,21 @@ _sslContext = ssl.create_default_context()
 _sslContext.check_hostname = False
 _sslContext.verify_mode = ssl.CERT_NONE
 
-DB_POOL_SIZE = 5
-DB_MAX_OVERFLOW = 5
-DB_POOL_TIMEOUT = 10
+from sqlalchemy.pool import NullPool
+
 DB_CONNECT_TIMEOUT = 10
 
+# Supabase Pooler (pgbouncer, Transaction mode) 호환 설정:
+# 1. NullPool: 앱 측 풀링 비활성화 (pgbouncer가 풀링 담당)
+# 2. statement_cache_size=0: prepared statement 캐시 비활성화
 engine = create_async_engine(
     ASYNC_DATABASE_URL,
     echo=False,
-    pool_pre_ping=True,
-    pool_size=DB_POOL_SIZE,
-    max_overflow=DB_MAX_OVERFLOW,
-    pool_timeout=DB_POOL_TIMEOUT,
+    poolclass=NullPool,
     connect_args={
         "ssl": _sslContext,
         "timeout": DB_CONNECT_TIMEOUT,
         "command_timeout": DB_CONNECT_TIMEOUT,
-        # Supabase Pooler (Transaction mode)는 prepared statements 미지원
-        # asyncpg는 statement_cache_size로 캐시를 비활성화
         "statement_cache_size": 0,
     },
 )
