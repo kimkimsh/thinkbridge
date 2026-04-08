@@ -88,6 +88,19 @@ async def healthCheck() -> dict:
     }
 
 
+@app.get("/health/db")
+async def healthCheckDb() -> dict:
+    """DB 연결 상태 확인 - 디버깅용"""
+    from sqlalchemy import text
+    try:
+        async with engine.begin() as conn:
+            tResult = await conn.execute(text("SELECT 1"))
+            tResult.fetchone()
+        return {"db": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
+    except Exception as tError:
+        return {"db": "error", "detail": str(tError), "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
 async def _generateSseTestEvents():
     """
     SSE 테스트용 이벤트 생성기
