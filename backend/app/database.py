@@ -1,12 +1,14 @@
 import ssl
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from app.config import settings
 
@@ -19,7 +21,6 @@ def _buildAsyncDatabaseUrl(databaseUrl: str) -> str:
     Handles various PostgreSQL URL schemes from Supabase/Render.
     """
     if databaseUrl.startswith("postgresql+asyncpg://"):
-        # Already in async format
         return databaseUrl
     if databaseUrl.startswith("postgres://"):
         return databaseUrl.replace("postgres://", "postgresql+asyncpg://", 1)
@@ -31,18 +32,14 @@ def _buildAsyncDatabaseUrl(databaseUrl: str) -> str:
 ASYNC_DATABASE_URL = _buildAsyncDatabaseUrl(settings.DATABASE_URL)
 
 # Supabase는 SSL 연결을 요구함
-# asyncpg용 SSL 컨텍스트 생성 (서버 인증서 검증 비활성화 — Supabase 자체 인증)
 _sslContext = ssl.create_default_context()
 _sslContext.check_hostname = False
 _sslContext.verify_mode = ssl.CERT_NONE
 
-from sqlalchemy.pool import NullPool
-
 DB_CONNECT_TIMEOUT = 10
 
-# Supabase Pooler (pgbouncer, Transaction mode) 호환 설정:
-# 1. NullPool: 앱 측 풀링 비활성화 (pgbouncer가 풀링 담당)
-# 2. statement_cache_size=0: prepared statement 캐시 비활성화
+# Supabase Session Mode Pooler 호환 설정:
+# NullPool: 앱 측 풀링 비활성화 (pgbouncer가 풀링 담당)
 engine = create_async_engine(
     ASYNC_DATABASE_URL,
     echo=False,
@@ -54,6 +51,23 @@ engine = create_async_engine(
         "statement_cache_size": 0,
     },
 )
+
+
+# asyncpg prepared statement 캐시를 강제 비활성화
+# SQLAlchemy dialect 초기화 시에도 적용되도록 connect 이벤트에서 설정
+@event.listens_for(engine.sync_engine, "connect")
+def _disablePreparedStatementCache(dbapi_connection, connection_record):
+    """
+    Supabase pgbouncer 호환: asyncpg의 prepared statement 캐시를 비활성화.
+    connect_args의 statement_cache_size=0이 dialect 초기화에 적용되지 않는
+    문제를 우회하기 위해 raw connection 레벨에서 캐시를 직접 제거.
+    """
+    raw_conn = dbapi_connection.dbapi_connection
+    if hasattr(raw_conn, "_stmt_cache"):
+        raw_conn._stmt_cache.clear()
+    if hasattr(raw_conn, "_stmts_to_close"):
+        raw_conn._stmts_to_close.clear()
+
 
 # 비동기 세션 팩토리
 async_session_maker = async_sessionmaker(
