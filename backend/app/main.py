@@ -18,6 +18,9 @@ SSE_TEST_EVENT_COUNT = 5
 SSE_TEST_INTERVAL_SECONDS = 0.5
 
 
+STARTUP_DB_TIMEOUT_SECONDS = 15
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -27,8 +30,9 @@ async def lifespan(app: FastAPI):
     import logging
     tLogger = logging.getLogger(__name__)
     try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        async with asyncio.timeout(STARTUP_DB_TIMEOUT_SECONDS):
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
         tLogger.info("Database tables created successfully")
     except Exception as tError:
         tLogger.error("Failed to create database tables: %s", tError)

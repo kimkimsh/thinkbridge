@@ -36,11 +36,23 @@ _sslContext = ssl.create_default_context()
 _sslContext.check_hostname = False
 _sslContext.verify_mode = ssl.CERT_NONE
 
+DB_POOL_SIZE = 5
+DB_MAX_OVERFLOW = 5
+DB_POOL_TIMEOUT = 10
+DB_CONNECT_TIMEOUT = 10
+
 engine = create_async_engine(
     ASYNC_DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
-    connect_args={"ssl": _sslContext},
+    pool_size=DB_POOL_SIZE,
+    max_overflow=DB_MAX_OVERFLOW,
+    pool_timeout=DB_POOL_TIMEOUT,
+    connect_args={
+        "ssl": _sslContext,
+        "timeout": DB_CONNECT_TIMEOUT,
+        "command_timeout": DB_CONNECT_TIMEOUT,
+    },
 )
 
 # 비동기 세션 팩토리
