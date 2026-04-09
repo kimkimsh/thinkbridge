@@ -249,3 +249,15 @@ See `.claude/agents.md` for detailed agent team setup.
 3. **1:00-1:45** Tab switch → Student report (radar + growth trend)
 4. **1:45-2:40** Tab switch → Instructor dashboard (heatmap + replay)
 5. **2:40-3:00** Vision statement
+
+## Work Log Policy
+
+After completing any improvement, bug fix, feature addition, or significant change to the project, you MUST document the work in `docs/work_log/`:
+
+- **Create a new file** or **update an existing file** — whichever is more appropriate.
+- Use Markdown format (`.md` files).
+- Include: what was changed, why, which files were affected, and any relevant commit hashes.
+- For bug fixes: document the symptom, root cause, and fix applied.
+- For new features: document the design decision and implementation summary.
+- Keep entries concise but thorough enough for another developer to understand the context.
+- Naming convention: use descriptive names (e.g., `06_sse_bugfix.md`, `07_mobile_polish.md`) or append to existing topic files.
