@@ -445,12 +445,29 @@ async def _streamFromApi(
                 "data": _getDefaultAnalysis(),
             }
 
-        # 텍스트 응답이 없었던 경우 방어적 기본 메시지 전송
+        # 텍스트 응답이 없었던 경우: non-streaming으로 재시도하여 실제 응답 획득
         if not tHasTextContent:
-            yield {
-                "type": EVENT_TYPE_TOKEN,
-                "data": FALLBACK_RESPONSE_TEXT,
-            }
+            logger.warning("No text content in streaming response, retrying non-streaming")
+            try:
+                tRetryResponse = await client.messages.create(
+                    model=CLAUDE_MODEL,
+                    max_tokens=MAX_TOKENS,
+                    system=systemPrompt,
+                    messages=messages,
+                    tools=[ANALYZE_THINKING_TOOL],
+                    tool_choice={"type": TOOL_CHOICE_AUTO},
+                )
+                tRetryText, _tRetryAnalysis = _parseResponse(tRetryResponse)
+                yield {
+                    "type": EVENT_TYPE_TOKEN,
+                    "data": tRetryText,
+                }
+            except Exception as tRetryError:
+                logger.error("Non-streaming retry failed: %s", tRetryError)
+                yield {
+                    "type": EVENT_TYPE_TOKEN,
+                    "data": FALLBACK_RESPONSE_TEXT,
+                }
 
         # 완료 이벤트 (토큰 사용량 포함)
         yield {

@@ -165,6 +165,7 @@ export default function StudentChatPage()
                 <ChatInterface
                     sessionId={mSessionId}
                     subject={mSelectedSubject}
+                    topic={mTopicInput}
                     isGuest={tIsGuest}
                     isDemo={tIsDemo}
                 />

@@ -64,6 +64,7 @@ interface ChatInterfaceProps
 {
     sessionId: number;
     subject: string;
+    topic?: string;
     isGuest?: boolean;
     isDemo?: boolean;
 }
@@ -80,7 +81,7 @@ interface ChatMessage
 
 // --- Component ---
 
-export function ChatInterface({ sessionId, subject, isGuest, isDemo }: ChatInterfaceProps)
+export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: ChatInterfaceProps)
 {
     // --- State ---
     const [mMessages, setMessages] = useState<ChatMessage[]>([]);
@@ -328,6 +329,11 @@ export function ChatInterface({ sessionId, subject, isGuest, isDemo }: ChatInter
                         <Badge variant="outline" className="text-xs">
                             {tSubjectLabel}
                         </Badge>
+                        {topic && (
+                            <span className="text-sm font-medium text-gray-700 truncate max-w-[200px]">
+                                {topic}
+                            </span>
+                        )}
                         {isGuest && (
                             <Badge
                                 variant="secondary"
