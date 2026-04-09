@@ -13,6 +13,8 @@ import { ClassSelector } from "@/components/dashboard/ClassSelector";
 import { SummaryCards } from "@/components/dashboard/SummaryCards";
 import { HeatmapChart } from "@/components/dashboard/HeatmapChart";
 import { StudentList } from "@/components/dashboard/StudentList";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
 import type { ClassSummary, StudentSummary, HeatmapResponse } from "@/types";
 
 
@@ -21,6 +23,7 @@ import type { ClassSummary, StudentSummary, HeatmapResponse } from "@/types";
 const PAGE_TITLE = "교강사 대시보드";
 const ERROR_LOAD_CLASSES = "반 목록을 불러오는 중 오류가 발생했습니다.";
 const ERROR_LOAD_DATA = "데이터를 불러오는 중 오류가 발생했습니다.";
+const RETRY_BUTTON_LABEL = "다시 시도";
 
 
 // --- Component ---
@@ -178,8 +181,42 @@ export default function InstructorDashboardPage()
 
             {/* 에러 메시지 */}
             {mError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {mError}
+                <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                    <span className="text-sm text-red-700">{mError}</span>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="ml-4 shrink-0 border-red-300 text-red-700 hover:bg-red-100"
+                        onClick={() =>
+                        {
+                            setError(null);
+                            if (mError === ERROR_LOAD_CLASSES)
+                            {
+                                setIsLoadingClasses(true);
+                                getClasses(token!).then((tClasses) =>
+                                {
+                                    setClasses(tClasses);
+                                    if (tClasses.length > 0)
+                                    {
+                                        setSelectedClassId(tClasses[0].id);
+                                    }
+                                }).catch(() =>
+                                {
+                                    setError(ERROR_LOAD_CLASSES);
+                                }).finally(() =>
+                                {
+                                    setIsLoadingClasses(false);
+                                });
+                            }
+                            else if (mSelectedClassId !== null)
+                            {
+                                loadClassData(mSelectedClassId);
+                            }
+                        }}
+                    >
+                        <RefreshCw className="mr-1 h-3 w-3" />
+                        {RETRY_BUTTON_LABEL}
+                    </Button>
                 </div>
             )}
 

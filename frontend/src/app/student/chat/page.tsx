@@ -7,7 +7,7 @@
  * Supports guest mode with turn-limited badge.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { MessageCircle, BookOpen, FlaskConical, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChatInterface } from "@/components/chat/ChatInterface";
 import { useAuth } from "@/lib/auth";
-import { createSession } from "@/lib/api";
+import { createSession, getSessionDetail } from "@/lib/api";
 import { SUBJECT_LABELS, GUEST_MAX_TURNS } from "@/lib/constants";
 
 
@@ -71,6 +71,54 @@ export default function StudentChatPage()
     const tIsGuest = user?.isGuest === true;
     const tIsDemo = searchParams.get("demo") === "true";
     const tCanStart = mTopicInput.trim().length > 0 && !mIsCreating;
+
+    /**
+     * If sessionId search param is present, load that session and render ChatInterface directly.
+     */
+    useEffect(() =>
+    {
+        const tSessionIdParam = searchParams.get("sessionId");
+        if (!tSessionIdParam || !token)
+        {
+            return;
+        }
+
+        const tParsedId = Number(tSessionIdParam);
+        if (isNaN(tParsedId))
+        {
+            return;
+        }
+
+        let tIsCancelled = false;
+
+        async function loadExistingSession()
+        {
+            try
+            {
+                const tDetail = await getSessionDetail(tParsedId, token!);
+                if (!tIsCancelled)
+                {
+                    setSessionId(tDetail.id);
+                    setSelectedSubject(tDetail.subject);
+                }
+            }
+            catch
+            {
+                // 세션 로드 실패 시 새 대화 시작 UI 유지
+                if (!tIsCancelled)
+                {
+                    setError("기존 세션을 불러올 수 없습니다. 새 대화를 시작하세요.");
+                }
+            }
+        }
+
+        loadExistingSession();
+
+        return () =>
+        {
+            tIsCancelled = true;
+        };
+    }, [searchParams, token]);
 
     /**
      * Creates a new tutoring session and transitions to chat interface.

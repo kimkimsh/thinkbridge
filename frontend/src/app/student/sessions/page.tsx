@@ -224,7 +224,7 @@ export default function StudentSessionsPage()
         }
         else
         {
-            router.push("/student/chat");
+            router.push(`/student/chat?sessionId=${session.id}`);
         }
     }
 

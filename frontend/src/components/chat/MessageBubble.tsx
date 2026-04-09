@@ -51,7 +51,7 @@ export function MessageBubble({ message, isStreaming }: MessageBubbleProps)
                         ${tIsUser ? "text-blue-200" : "text-gray-400"}
                     `}
                 >
-                    {tIsUser ? "You" : "ThinkBridge"}
+                    {tIsUser ? "나" : "AI 튜터"}
                 </div>
 
                 {/* Message content with streaming cursor */}

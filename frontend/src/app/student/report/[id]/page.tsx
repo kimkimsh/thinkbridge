@@ -113,17 +113,17 @@ function calculateAverageScores(growthData: GrowthTrendEntry[]): Record<string, 
 function countStageTransitions(sessionDetail: SessionDetail): number
 {
     let tTransitions = 0;
-    let tPrevStage = 0;
+    let tPrevStage = -1;
 
     for (const msg of sessionDetail.messages)
     {
         if (msg.analysis)
         {
-            if (msg.analysis.socraticStage !== tPrevStage)
+            if (tPrevStage !== -1 && msg.analysis.socraticStage !== tPrevStage)
             {
                 tTransitions++;
-                tPrevStage = msg.analysis.socraticStage;
             }
+            tPrevStage = msg.analysis.socraticStage;
         }
     }
 

@@ -6,16 +6,18 @@
  * and per-subject radar chart overlay. All data from seed data.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { getAdminStats, getAdminClasses, getAdminSubjects } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
     Users,
     BookOpen,
     TrendingUp,
     Activity,
     AlertTriangle,
+    RefreshCw,
 } from "lucide-react";
 import {
     BarChart,
@@ -47,6 +49,7 @@ import type { AdminStats, AdminClassComparison, AdminSubjectRadar } from "@/type
 const PAGE_TITLE = "운영자 대시보드";
 const DEMO_BANNER_TEXT = "데모 데이터입니다. 실제 운영 시 전체 학원 데이터가 표시됩니다.";
 const ERROR_LOAD_DATA = "데이터를 불러오는 중 오류가 발생했습니다.";
+const RETRY_BUTTON_LABEL = "다시 시도";
 
 const BAR_CHART_TITLE = "반별 사고력 비교";
 const RADAR_CHART_TITLE = "과목별 6차원 레이더";
@@ -192,57 +195,42 @@ export default function AdminDashboardPage()
     /**
      * 전체 데이터 로드 - 3개 API 병렬 호출
      */
-    useEffect(() =>
+    const loadDashboardData = useCallback(async () =>
     {
         if (!token)
         {
             return;
         }
 
-        let tIsCancelled = false;
+        setIsLoading(true);
+        setError(null);
 
-        async function loadDashboardData()
+        try
         {
-            try
-            {
-                const [tStats, tClasses, tSubjects] = await Promise.all([
-                    getAdminStats(token!),
-                    getAdminClasses(token!),
-                    getAdminSubjects(token!),
-                ]);
+            const [tStats, tClasses, tSubjects] = await Promise.all([
+                getAdminStats(token),
+                getAdminClasses(token),
+                getAdminSubjects(token),
+            ]);
 
-                if (tIsCancelled)
-                {
-                    return;
-                }
-
-                setStats(tStats);
-                setClasses(tClasses);
-                setSubjects(tSubjects);
-            }
-            catch
-            {
-                if (!tIsCancelled)
-                {
-                    setError(ERROR_LOAD_DATA);
-                }
-            }
-            finally
-            {
-                if (!tIsCancelled)
-                {
-                    setIsLoading(false);
-                }
-            }
+            setStats(tStats);
+            setClasses(tClasses);
+            setSubjects(tSubjects);
         }
-
-        loadDashboardData();
-
-        return () =>
+        catch
         {
-            tIsCancelled = true;
-        };
+            setError(ERROR_LOAD_DATA);
+        }
+        finally
+        {
+            setIsLoading(false);
+        }
     }, [token]);
+
+    useEffect(() =>
+    {
+        loadDashboardData();
+    }, [loadDashboardData]);
 
     // 로딩 스켈레톤
     if (mIsLoading)
@@ -282,8 +270,17 @@ export default function AdminDashboardPage()
 
             {/* 에러 메시지 */}
             {mError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {mError}
+                <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                    <span className="text-sm text-red-700">{mError}</span>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="ml-4 shrink-0 border-red-300 text-red-700 hover:bg-red-100"
+                        onClick={loadDashboardData}
+                    >
+                        <RefreshCw className="mr-1 h-3 w-3" />
+                        {RETRY_BUTTON_LABEL}
+                    </Button>
                 </div>
             )}
 

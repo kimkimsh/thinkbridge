@@ -38,6 +38,7 @@ const NO_SESSIONS_TEXT = "이 학생의 완료된 세션이 없습니다.";
 const SELECT_SESSION_TEXT = "왼쪽에서 세션을 선택하세요.";
 const ERROR_LOAD_SESSIONS = "세션 목록을 불러올 수 없습니다.";
 const ERROR_LOAD_DETAIL = "세션 상세를 불러올 수 없습니다.";
+const NO_MESSAGES_TEXT = "이 세션에 메시지가 없습니다.";
 
 
 // --- Component ---
@@ -318,28 +319,36 @@ export default function InstructorReplayPage()
                                 {/* 메시지 목록 */}
                                 <CardContent className="p-0">
                                     <ScrollArea className="h-[50vh] md:h-[calc(100vh-16rem)]">
-                                        <div className="space-y-3 p-4">
-                                            {mSessionDetail.messages.map((message, index) => (
-                                                <div
-                                                    key={message.id}
-                                                    className={`cursor-pointer rounded-lg p-1 transition-colors ${
-                                                        mSelectedTurnIndex === index
-                                                            ? "bg-blue-50 ring-1 ring-blue-200"
-                                                            : "hover:bg-gray-50"
-                                                    }`}
-                                                    onClick={() => handleMessageClick(message, index)}
-                                                >
-                                                    <MessageBubble message={message} />
-                                                    {message.analysis && (
-                                                        <div className="mt-1 flex justify-end pr-2">
-                                                            <span className="text-[10px] text-muted-foreground">
-                                                                분석 보기
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
+                                        {mSessionDetail.messages.length === 0 ? (
+                                            <div className="flex h-full items-center justify-center py-12">
+                                                <p className="text-sm text-muted-foreground">
+                                                    {NO_MESSAGES_TEXT}
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3 p-4">
+                                                {mSessionDetail.messages.map((message, index) => (
+                                                    <div
+                                                        key={message.id}
+                                                        className={`cursor-pointer rounded-lg p-1 transition-colors ${
+                                                            mSelectedTurnIndex === index
+                                                                ? "bg-blue-50 ring-1 ring-blue-200"
+                                                                : "hover:bg-gray-50"
+                                                        }`}
+                                                        onClick={() => handleMessageClick(message, index)}
+                                                    >
+                                                        <MessageBubble message={message} />
+                                                        {message.analysis && (
+                                                            <div className="mt-1 flex justify-end pr-2">
+                                                                <span className="text-[10px] text-muted-foreground">
+                                                                    분석 보기
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </ScrollArea>
                                 </CardContent>
                             </>
