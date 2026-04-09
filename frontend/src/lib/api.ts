@@ -30,9 +30,20 @@ const ERROR_STREAM_NO_BODY = "서버 응답에 스트림 본문이 없습니다.
 
 // --- SSE Parsing Constants ---
 
-const SSE_EVENT_PREFIX = "event: ";
-const SSE_DATA_PREFIX = "data: ";
-const SSE_DOUBLE_NEWLINE = "\n\n";
+const SSE_EVENT_PREFIX = "event:";
+const SSE_DATA_PREFIX = "data:";
+
+/**
+ * Regex matching SSE event boundaries (blank line between events).
+ * Handles all valid SSE line endings: \r\n, \r, or \n.
+ * A blank line is two consecutive line endings with nothing between them.
+ */
+const SSE_EVENT_BOUNDARY_REGEX = /\r\n\r\n|\r\r|\n\n/;
+
+/**
+ * Regex matching any single line ending: \r\n (must be checked first), \r, or \n.
+ */
+const SSE_LINE_SPLIT_REGEX = /\r\n|\r|\n/;
 
 
 // --- Snake-to-Camel Conversion for Analysis ---
@@ -146,6 +157,7 @@ function convertAnalysisToCamelCase(rawAnalysis: Record<string, unknown>): Thoug
 /**
  * Parses a buffer of SSE text into discrete events.
  * SSE format: "event: <type>\ndata: <json>\n\n"
+ * Handles all valid SSE line endings: \r\n, \r, and \n.
  * Returns parsed events and any remaining incomplete data.
  */
 function parseSSEBuffer(buffer: string): ParsedSSEResult
@@ -155,28 +167,35 @@ function parseSSEBuffer(buffer: string): ParsedSSEResult
 
     while (true)
     {
-        const tEndIndex = tRemaining.indexOf(SSE_DOUBLE_NEWLINE);
-        if (tEndIndex === -1)
+        const tMatch = SSE_EVENT_BOUNDARY_REGEX.exec(tRemaining);
+        if (!tMatch || tMatch.index === undefined)
         {
             break;
         }
 
+        const tEndIndex = tMatch.index;
+        const tBoundaryLength = tMatch[0].length;
+
         const tBlock = tRemaining.substring(0, tEndIndex);
-        tRemaining = tRemaining.substring(tEndIndex + SSE_DOUBLE_NEWLINE.length);
+        tRemaining = tRemaining.substring(tEndIndex + tBoundaryLength);
 
         let tEventType = "";
         let tDataStr = "";
 
-        const tLines = tBlock.split("\n");
+        // Split lines using regex that handles all line ending variants
+        const tLines = tBlock.split(SSE_LINE_SPLIT_REGEX);
         for (const tLine of tLines)
         {
-            if (tLine.startsWith(SSE_EVENT_PREFIX))
+            // Trim to handle any residual whitespace from line endings
+            const tTrimmedLine = tLine.trim();
+
+            if (tTrimmedLine.startsWith(SSE_EVENT_PREFIX))
             {
-                tEventType = tLine.substring(SSE_EVENT_PREFIX.length).trim();
+                tEventType = tTrimmedLine.substring(SSE_EVENT_PREFIX.length).trim();
             }
-            else if (tLine.startsWith(SSE_DATA_PREFIX))
+            else if (tTrimmedLine.startsWith(SSE_DATA_PREFIX))
             {
-                tDataStr = tLine.substring(SSE_DATA_PREFIX.length);
+                tDataStr = tTrimmedLine.substring(SSE_DATA_PREFIX.length).trim();
             }
         }
 
