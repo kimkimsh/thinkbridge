@@ -17,7 +17,7 @@ import {
     type MutableRefObject,
 } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Lightbulb, Square, FileText, Brain } from "lucide-react";
+import { Send, Lightbulb, Square, FileText, Brain, Sparkles, MessageCircle, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -57,6 +57,13 @@ const TEXTAREA_MAX_ROWS = 4;
 /** Scroll delay to ensure DOM update before scrolling */
 const SCROLL_DELAY_MS = 50;
 
+/** Welcome tips for Socratic tutoring */
+const WELCOME_TIPS = [
+    { icon: MessageCircle, text: "질문을 통해 스스로 답을 찾아가는 과정을 경험하세요" },
+    { icon: Lightbulb, text: "막히면 '힌트' 버튼을 눌러 도움을 받을 수 있어요" },
+    { icon: BookOpen, text: "대화가 끝나면 사고 과정 리포트를 확인할 수 있어요" },
+];
+
 
 // --- Props ---
 
@@ -94,6 +101,7 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
     const [mErrorMessage, setErrorMessage] = useState<string | null>(null);
     const [mIsEnding, setIsEnding] = useState(false);
     const [mIsSessionEnded, setIsSessionEnded] = useState(false);
+    const [mIsInputFocused, setIsInputFocused] = useState(false);
 
     // --- Refs ---
     const mScrollRef = useRef<HTMLDivElement>(null);
@@ -321,12 +329,12 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
     }, [router, sessionId]);
 
     return (
-        <div className="flex h-full flex-col">
+        <div className="flex h-full flex-col bg-gray-50/50">
             {/* Progress bar */}
-            <div className="shrink-0 border-b bg-white p-3">
+            <div className="shrink-0 border-b border-indigo-100/50 bg-white p-3">
                 <div className="mb-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-xs text-indigo-700">
                             {tSubjectLabel}
                         </Badge>
                         {topic && (
@@ -337,7 +345,7 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
                         {isGuest && (
                             <Badge
                                 variant="secondary"
-                                className="bg-amber-100 text-amber-700 border-amber-300 text-xs"
+                                className="bg-amber-50 text-amber-700 border-amber-200 text-xs"
                             >
                                 체험 중 ({mTurnCount}/{GUEST_MAX_TURNS})
                             </Badge>
@@ -358,19 +366,36 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
                         <div className="mx-auto max-w-2xl space-y-4">
                             {/* Welcome message */}
                             {mMessages.length === 0 && !mIsStreaming && (
-                                <div className="flex items-center justify-center py-12">
-                                    <div className="text-center">
-                                        <div className="mb-3 text-4xl">
-                                            {"🤔"}
+                                <div className="flex items-center justify-center py-8 sm:py-12">
+                                    <div className="w-full max-w-sm rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
+                                        {/* Header with icon */}
+                                        <div className="mb-4 flex flex-col items-center text-center">
+                                            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-200/50">
+                                                <Sparkles className="h-7 w-7 text-white" />
+                                            </div>
+                                            <h3 className="text-lg font-bold text-gray-800">
+                                                안녕하세요!
+                                            </h3>
+                                            <p className="mt-1 text-sm text-gray-500">
+                                                오늘은 어떤 주제로 함께 생각해볼까요?
+                                            </p>
                                         </div>
-                                        <h3 className="mb-1 text-lg font-semibold text-gray-700">
-                                            함께 생각해 봅시다
-                                        </h3>
-                                        <p className="text-sm text-gray-500">
-                                            궁금한 점을 물어보세요. 답을 알려주는 대신,
-                                            <br />
-                                            스스로 답을 찾도록 도와드릴게요.
-                                        </p>
+
+                                        {/* Tips */}
+                                        <div className="space-y-2.5">
+                                            {WELCOME_TIPS.map((tip, index) =>
+                                            {
+                                                const TipIcon = tip.icon;
+                                                return (
+                                                    <div key={index} className="flex items-start gap-2.5 rounded-lg bg-indigo-50/60 px-3 py-2.5">
+                                                        <TipIcon className="mt-0.5 h-4 w-4 shrink-0 text-indigo-500" />
+                                                        <span className="text-xs leading-relaxed text-gray-600">
+                                                            {tip.text}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -393,12 +418,15 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
 
                             {/* Typing indicator (before any text arrives) */}
                             {mIsStreaming && mStreamingText.length === 0 && (
-                                <div className="flex justify-start">
-                                    <div className="rounded-2xl rounded-bl-md border border-gray-200 bg-gray-100 px-4 py-3">
+                                <div className="flex items-center gap-2.5 justify-start">
+                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 shadow-sm">
+                                        <Sparkles className="h-4 w-4 text-white" />
+                                    </div>
+                                    <div className="rounded-2xl rounded-bl-md border border-gray-100 bg-white px-4 py-3 shadow-sm">
                                         <div className="flex items-center gap-1.5">
-                                            <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: "0ms" }} />
-                                            <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: "150ms" }} />
-                                            <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: "300ms" }} />
+                                            <span className="h-2 w-2 animate-bounce rounded-full bg-indigo-400" style={{ animationDelay: "0ms" }} />
+                                            <span className="h-2 w-2 animate-bounce rounded-full bg-indigo-400" style={{ animationDelay: "150ms" }} />
+                                            <span className="h-2 w-2 animate-bounce rounded-full bg-indigo-400" style={{ animationDelay: "300ms" }} />
                                         </div>
                                     </div>
                                 </div>
@@ -413,7 +441,7 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
 
                             {/* Guest limit reached */}
                             {tIsGuestLimitReached && (
-                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-4 text-center">
+                                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-center">
                                     <p className="mb-2 text-sm font-medium text-amber-800">
                                         체험 {GUEST_MAX_TURNS}턴이 모두 사용되었습니다.
                                     </p>
@@ -422,6 +450,7 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
                                     </p>
                                     <Button
                                         size="sm"
+                                        className="bg-indigo-600 hover:bg-indigo-700"
                                         onClick={() => router.push("/register")}
                                     >
                                         회원가입하기
@@ -431,13 +460,13 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
 
                             {/* Stage 5 report button */}
                             {tShowReportButton && !tIsGuestLimitReached && mMessages.length > 0 && (
-                                <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-4 text-center">
-                                    <p className="mb-2 text-sm font-medium text-green-800">
+                                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-center">
+                                    <p className="mb-2 text-sm font-medium text-emerald-800">
                                         대화가 완료되었습니다! 사고 과정 리포트를 확인해 보세요.
                                     </p>
                                     <Button
                                         size="sm"
-                                        className="bg-green-600 hover:bg-green-700"
+                                        className="bg-emerald-600 hover:bg-emerald-700"
                                         onClick={handleViewReport}
                                     >
                                         <FileText className="mr-1.5 h-4 w-4" />
@@ -449,65 +478,79 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
                     </div>
 
                     {/* Input area */}
-                    <div className="shrink-0 border-t bg-white p-3 sm:p-4">
-                        <div className="mx-auto flex max-w-2xl items-end gap-2">
-                            <Textarea
-                                ref={mTextareaRef}
-                                value={mInputValue}
-                                onChange={handleInputChange}
-                                onKeyDown={handleKeyDown}
-                                placeholder={
-                                    tIsGuestLimitReached
-                                        ? "체험이 종료되었습니다"
-                                        : mIsSessionEnded
-                                            ? "세션이 종료되었습니다"
-                                            : "질문을 입력하세요... (Shift+Enter: 줄바꿈)"
-                                }
-                                disabled={mIsStreaming || tIsGuestLimitReached || mIsSessionEnded}
-                                rows={TEXTAREA_MIN_ROWS}
-                                className="min-h-[40px] max-h-[120px] resize-none"
-                            />
-
-                            {/* Hint button */}
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={handleHintRequest}
-                                disabled={mIsStreaming || mMessages.length === 0 || tIsGuestLimitReached || mIsSessionEnded}
-                                className="shrink-0 gap-1 whitespace-nowrap"
-                                title="힌트 더 받기"
+                    <div className="shrink-0 border-t border-gray-200/80 bg-white p-3 sm:p-4">
+                        <div className="mx-auto max-w-2xl">
+                            <div
+                                className={`
+                                    flex items-end gap-2 rounded-xl border bg-white p-2 transition-all duration-200
+                                    ${mIsInputFocused
+                                        ? "border-indigo-300 shadow-md shadow-indigo-100/50 ring-1 ring-indigo-200"
+                                        : "border-gray-200 shadow-sm"
+                                    }
+                                `}
                             >
-                                <Lightbulb className="h-4 w-4" />
-                                <span className="hidden sm:inline">힌트</span>
-                            </Button>
+                                <Textarea
+                                    ref={mTextareaRef}
+                                    value={mInputValue}
+                                    onChange={handleInputChange}
+                                    onKeyDown={handleKeyDown}
+                                    onFocus={() => setIsInputFocused(true)}
+                                    onBlur={() => setIsInputFocused(false)}
+                                    placeholder={
+                                        tIsGuestLimitReached
+                                            ? "체험이 종료되었습니다"
+                                            : mIsSessionEnded
+                                                ? "세션이 종료되었습니다"
+                                                : "질문을 입력하세요... (Shift+Enter: 줄바꿈)"
+                                    }
+                                    disabled={mIsStreaming || tIsGuestLimitReached || mIsSessionEnded}
+                                    rows={TEXTAREA_MIN_ROWS}
+                                    className="min-h-[40px] max-h-[120px] resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
+                                />
 
-                            {/* Send button */}
-                            <Button
-                                size="sm"
-                                onClick={() => handleSend(mInputValue)}
-                                disabled={!tCanSend}
-                                className="shrink-0"
-                            >
-                                <Send className="h-4 w-4" />
-                            </Button>
+                                <div className="flex shrink-0 items-center gap-1.5 pb-0.5">
+                                    {/* Hint button */}
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={handleHintRequest}
+                                        disabled={mIsStreaming || mMessages.length === 0 || tIsGuestLimitReached || mIsSessionEnded}
+                                        className="gap-1 whitespace-nowrap text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                                        title="힌트 더 받기"
+                                    >
+                                        <Lightbulb className="h-4 w-4" />
+                                        <span className="hidden sm:inline text-xs">힌트</span>
+                                    </Button>
 
-                            {/* End session button */}
-                            <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={handleEndSession}
-                                disabled={mIsStreaming || mIsEnding || mIsSessionEnded || mMessages.length === 0}
-                                className="shrink-0 gap-1 whitespace-nowrap"
-                            >
-                                <Square className="h-3.5 w-3.5" />
-                                <span className="hidden sm:inline">종료</span>
-                            </Button>
+                                    {/* Send button */}
+                                    <Button
+                                        size="sm"
+                                        onClick={() => handleSend(mInputValue)}
+                                        disabled={!tCanSend}
+                                        className="bg-indigo-600 hover:bg-indigo-700 shadow-sm"
+                                    >
+                                        <Send className="h-4 w-4" />
+                                    </Button>
+
+                                    {/* End session button */}
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={handleEndSession}
+                                        disabled={mIsStreaming || mIsEnding || mIsSessionEnded || mMessages.length === 0}
+                                        className="gap-1 whitespace-nowrap text-red-500 hover:bg-red-50 hover:text-red-600"
+                                    >
+                                        <Square className="h-3.5 w-3.5" />
+                                        <span className="hidden sm:inline text-xs">종료</span>
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 {/* Analysis panel (desktop sidebar) */}
-                <div className="hidden w-72 shrink-0 border-l bg-gray-50 p-3 lg:block xl:w-80">
+                <div className="hidden w-72 shrink-0 border-l border-indigo-100/50 bg-gradient-to-b from-gray-50 to-indigo-50/20 p-3 lg:block xl:w-80">
                     <ThoughtPanel
                         analysis={mCurrentAnalysis}
                         isDemo={isDemo}
@@ -522,14 +565,15 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
                         <SheetTrigger asChild>
                             <Button
                                 size="icon"
-                                className="h-12 w-12 rounded-full bg-blue-600 shadow-lg hover:bg-blue-700"
+                                className="h-12 w-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-300/40 hover:shadow-xl hover:shadow-indigo-300/60 transition-shadow"
                             >
                                 <Brain className="h-5 w-5 text-white" />
                             </Button>
                         </SheetTrigger>
                         <SheetContent side="bottom" className="max-h-[70vh] overflow-y-auto rounded-t-2xl px-4 pb-6 pt-4">
                             <SheetHeader className="mb-3">
-                                <SheetTitle className="text-sm font-semibold">
+                                <SheetTitle className="flex items-center gap-2 text-sm font-semibold">
+                                    <Sparkles className="h-4 w-4 text-indigo-600" />
                                     사고력 분석
                                 </SheetTitle>
                             </SheetHeader>

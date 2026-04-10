@@ -9,7 +9,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { MessageCircle, BookOpen, FlaskConical, PenLine } from "lucide-react";
+import { MessageCircle, BookOpen, FlaskConical, PenLine, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,44 @@ import { SUBJECT_LABELS, GUEST_MAX_TURNS } from "@/lib/constants";
 
 
 // --- Constants ---
+
+/** Subject color themes for visual distinction */
+const SUBJECT_THEMES: Record<string, {
+    border: string;
+    bg: string;
+    text: string;
+    iconBg: string;
+    iconColor: string;
+    ring: string;
+}> = {
+    math: {
+        border: "border-blue-500",
+        bg: "bg-blue-50",
+        text: "text-blue-700",
+        iconBg: "bg-gradient-to-br from-blue-500 to-blue-600",
+        iconColor: "text-white",
+        ring: "ring-blue-200",
+    },
+    science: {
+        border: "border-emerald-500",
+        bg: "bg-emerald-50",
+        text: "text-emerald-700",
+        iconBg: "bg-gradient-to-br from-emerald-500 to-teal-600",
+        iconColor: "text-white",
+        ring: "ring-emerald-200",
+    },
+    essay: {
+        border: "border-purple-500",
+        bg: "bg-purple-50",
+        text: "text-purple-700",
+        iconBg: "bg-gradient-to-br from-purple-500 to-violet-600",
+        iconColor: "text-white",
+        ring: "ring-purple-200",
+    },
+};
+
+/** Default theme for unknown subjects */
+const DEFAULT_THEME = SUBJECT_THEMES.math;
 
 /** Available subjects with their icons and descriptions */
 const SUBJECT_OPTIONS = [
@@ -175,15 +213,17 @@ export default function StudentChatPage()
 
     // --- Pre-session: subject + topic selection ---
     return (
-        <div className="flex h-[calc(100vh-4rem)] items-center justify-center p-4">
-            <Card className="w-full max-w-lg">
-                <CardHeader className="text-center">
-                    <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
-                        <MessageCircle className="h-6 w-6 text-blue-600" />
+        <div className="flex h-[calc(100vh-4rem)] items-center justify-center bg-gradient-to-b from-gray-50 to-indigo-50/30 p-4">
+            <Card className="w-full max-w-lg border-indigo-100 shadow-lg shadow-indigo-100/30">
+                <CardHeader className="text-center pb-4">
+                    <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-200/50">
+                        <Sparkles className="h-7 w-7 text-white" />
                     </div>
-                    <CardTitle className="text-xl">새 대화 시작</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                        과목과 주제를 선택하고 소크라테스식 대화를 시작하세요.
+                    <CardTitle className="text-xl font-bold text-gray-800">
+                        새 대화 시작
+                    </CardTitle>
+                    <p className="text-sm text-gray-500">
+                        과목과 주제를 선택하고 소크라테스식 대화를 시작하세요
                     </p>
 
                     {/* Guest badge */}
@@ -191,7 +231,7 @@ export default function StudentChatPage()
                         <div className="mt-2">
                             <Badge
                                 variant="secondary"
-                                className="bg-amber-100 text-amber-700 border-amber-300"
+                                className="bg-amber-50 text-amber-700 border-amber-200"
                             >
                                 {GUEST_MAX_TURNS}턴 체험 중
                             </Badge>
@@ -202,14 +242,15 @@ export default function StudentChatPage()
                 <CardContent className="space-y-6">
                     {/* Subject selector */}
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">
+                        <label className="text-sm font-semibold text-gray-700">
                             과목 선택
                         </label>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-3 gap-3">
                             {SUBJECT_OPTIONS.map((option) =>
                             {
                                 const tIsSelected = mSelectedSubject === option.key;
                                 const IconComponent = option.icon;
+                                const tTheme = SUBJECT_THEMES[option.key] || DEFAULT_THEME;
 
                                 return (
                                     <button
@@ -217,19 +258,31 @@ export default function StudentChatPage()
                                         type="button"
                                         onClick={() => setSelectedSubject(option.key)}
                                         className={`
-                                            flex flex-col items-center gap-1.5 rounded-lg border-2 p-3
+                                            flex flex-col items-center gap-2 rounded-xl border-2 p-4
                                             transition-all duration-200
                                             ${tIsSelected
-                                                ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
-                                                : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                                                ? `${tTheme.border} ${tTheme.bg} shadow-sm ring-2 ${tTheme.ring} ring-offset-1`
+                                                : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm"
                                             }
                                         `}
                                     >
-                                        <IconComponent className={`h-5 w-5 ${tIsSelected ? "text-blue-600" : "text-gray-400"}`} />
-                                        <span className="text-sm font-medium">
+                                        <div
+                                            className={`
+                                                flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-200
+                                                ${tIsSelected
+                                                    ? tTheme.iconBg
+                                                    : "bg-gray-100"
+                                                }
+                                            `}
+                                        >
+                                            <IconComponent
+                                                className={`h-5 w-5 ${tIsSelected ? tTheme.iconColor : "text-gray-400"}`}
+                                            />
+                                        </div>
+                                        <span className={`text-sm font-semibold ${tIsSelected ? tTheme.text : "text-gray-600"}`}>
                                             {SUBJECT_LABELS[option.key]}
                                         </span>
-                                        <span className="text-[10px] text-muted-foreground">
+                                        <span className="text-[10px] text-gray-400">
                                             {option.description}
                                         </span>
                                     </button>
@@ -240,7 +293,7 @@ export default function StudentChatPage()
 
                     {/* Topic input */}
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">
+                        <label className="text-sm font-semibold text-gray-700">
                             주제 입력
                         </label>
                         <Input
@@ -249,6 +302,7 @@ export default function StudentChatPage()
                             onKeyDown={handleTopicKeyDown}
                             placeholder={TOPIC_PLACEHOLDERS[mSelectedSubject] || DEFAULT_TOPIC_PLACEHOLDER}
                             disabled={mIsCreating}
+                            className="border-gray-200 focus-visible:border-indigo-300 focus-visible:ring-indigo-200"
                         />
                     </div>
 
@@ -261,7 +315,13 @@ export default function StudentChatPage()
 
                     {/* Start button */}
                     <Button
-                        className="w-full"
+                        className={`
+                            w-full shadow-md transition-all duration-200
+                            ${tCanStart
+                                ? "bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 shadow-indigo-200/50 hover:shadow-lg hover:shadow-indigo-300/50"
+                                : ""
+                            }
+                        `}
                         size="lg"
                         onClick={handleStartSession}
                         disabled={!tCanStart}
