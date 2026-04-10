@@ -432,10 +432,27 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
                                 </div>
                             )}
 
-                            {/* Error message */}
+                            {/* Error message with retry */}
                             {mErrorMessage && (
-                                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                                    {mErrorMessage}
+                                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                                    <p className="text-sm text-red-700">{mErrorMessage}</p>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="mt-2 border-red-300 text-red-600 hover:bg-red-100"
+                                        onClick={() =>
+                                        {
+                                            setErrorMessage(null);
+                                            const tLastUserMsg = mMessages.filter(m => m.role === "user").pop();
+                                            if (tLastUserMsg)
+                                            {
+                                                handleSend(tLastUserMsg.content);
+                                            }
+                                        }}
+                                        disabled={mIsStreaming}
+                                    >
+                                        다시 시도
+                                    </Button>
                                 </div>
                             )}
 

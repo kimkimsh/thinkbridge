@@ -70,6 +70,15 @@ TOOL_CHOICE_AUTO = "auto"
 CONTENT_TYPE_TEXT = "text"
 CONTENT_TYPE_TOOL_USE = "tool_use"
 
+# Overload/Rate Limit 재시도 상수
+OVERLOAD_RETRY_COUNT = 2
+OVERLOAD_RETRY_DELAY_SECONDS = 3
+
+# 사용자 친화 에러 메시지
+OVERLOADED_ERROR_MESSAGE = "AI 서버가 일시적으로 바쁩니다. 잠시 후 다시 시도해주세요."
+RATE_LIMIT_ERROR_MESSAGE = "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
+GENERIC_API_ERROR_MESSAGE = "AI 응답 생성에 실패했습니다. 다시 시도해주세요."
+
 # 히스토리 요약 관련 상수
 HISTORY_SUMMARY_PREFIX = "[이전 대화 요약] "
 
@@ -343,26 +352,51 @@ async def processTurnStreaming(
         2. JSON parse failure -> yield default analysis, error logged
         3. API timeout/error -> retry once, then yield error event
     """
-    # 스트리밍은 부분 데이터 전송 후 재시도 시 데이터 중복 위험이 있으므로
-    # 재시도하지 않고 즉시 에러 이벤트를 발생시킴
     tClient = _getClient()
     tSystemPrompt = _selectSystemPrompt(isGuest)
     tMessages = _buildMessages(sessionHistory, userMessage)
-
-    # 과목 정보를 시스템 프롬프트에 추가
     tFullSystemPrompt = f"{tSystemPrompt}\n\n현재 과목: {subject}"
 
-    try:
-        async for tEvent in _streamFromApi(tClient, tFullSystemPrompt, tMessages):
-            yield tEvent
+    # Overloaded/RateLimited는 재시도, 그 외 스트리밍 에러는 즉시 반환
+    tMaxRetries = OVERLOAD_RETRY_COUNT
+    for tAttempt in range(tMaxRetries + 1):
+        try:
+            async for tEvent in _streamFromApi(tClient, tFullSystemPrompt, tMessages):
+                yield tEvent
+            return  # 성공 시 함수 종료
 
-    except (anthropic.APITimeoutError, anthropic.APIError) as tError:
-        # Fallback stage 3: 스트리밍 실패 -> 에러 이벤트 전송 (재시도 없음)
-        logger.error("Claude API streaming failed: %s", tError)
-        yield {
-            "type": EVENT_TYPE_ERROR,
-            "data": {"message": f"AI 응답 생성에 실패했습니다: {str(tError)}"},
-        }
+        except anthropic.OverloadedError as tError:
+            # AI 서버 과부하 — 잠시 후 재시도
+            if tAttempt < tMaxRetries:
+                tWaitSeconds = OVERLOAD_RETRY_DELAY_SECONDS * (tAttempt + 1)
+                logger.warning(
+                    "Claude API overloaded (attempt %d/%d), retrying in %ds",
+                    tAttempt + 1, tMaxRetries + 1, tWaitSeconds,
+                )
+                import asyncio
+                await asyncio.sleep(tWaitSeconds)
+            else:
+                logger.error("Claude API overloaded after %d retries", tMaxRetries + 1)
+                yield {
+                    "type": EVENT_TYPE_ERROR,
+                    "data": {"message": OVERLOADED_ERROR_MESSAGE},
+                }
+
+        except anthropic.RateLimitError as tError:
+            logger.error("Claude API rate limited: %s", tError)
+            yield {
+                "type": EVENT_TYPE_ERROR,
+                "data": {"message": RATE_LIMIT_ERROR_MESSAGE},
+            }
+            return
+
+        except (anthropic.APITimeoutError, anthropic.APIError) as tError:
+            logger.error("Claude API streaming failed: %s", tError)
+            yield {
+                "type": EVENT_TYPE_ERROR,
+                "data": {"message": GENERIC_API_ERROR_MESSAGE},
+            }
+            return
 
 
 async def _streamFromApi(
