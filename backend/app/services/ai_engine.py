@@ -480,22 +480,35 @@ async def _streamFromApi(
             }
 
         # 텍스트 응답이 없었던 경우: non-streaming으로 재시도하여 실제 응답 획득
+        # 재시도 시 도구 없이 텍스트만 요청하여 반드시 텍스트 응답을 확보
         if not tHasTextContent:
-            logger.warning("No text content in streaming response, retrying non-streaming")
+            logger.warning("No text content in streaming response, retrying non-streaming (text-only)")
             try:
+                tRetrySystemPrompt = (
+                    systemPrompt
+                    + "\n\n[중요] 이번 응답에서는 반드시 한국어 텍스트로 소크라테스식 유도 질문을 작성하세요. "
+                    "도구 호출 없이 텍스트 응답만 작성하면 됩니다."
+                )
                 tRetryResponse = await client.messages.create(
                     model=CLAUDE_MODEL,
                     max_tokens=MAX_TOKENS,
-                    system=systemPrompt,
+                    system=tRetrySystemPrompt,
                     messages=messages,
-                    tools=[ANALYZE_THINKING_TOOL],
-                    tool_choice={"type": TOOL_CHOICE_AUTO},
                 )
-                tRetryText, _tRetryAnalysis = _parseResponse(tRetryResponse)
-                yield {
-                    "type": EVENT_TYPE_TOKEN,
-                    "data": tRetryText,
-                }
+                tRetryText = ""
+                for tBlock in tRetryResponse.content:
+                    if tBlock.type == CONTENT_TYPE_TEXT:
+                        tRetryText += tBlock.text
+                if tRetryText.strip():
+                    yield {
+                        "type": EVENT_TYPE_TOKEN,
+                        "data": tRetryText,
+                    }
+                else:
+                    yield {
+                        "type": EVENT_TYPE_TOKEN,
+                        "data": FALLBACK_RESPONSE_TEXT,
+                    }
             except Exception as tRetryError:
                 logger.error("Non-streaming retry failed: %s", tRetryError)
                 yield {

@@ -57,6 +57,12 @@ const TEXTAREA_MAX_ROWS = 4;
 /** Scroll delay to ensure DOM update before scrolling */
 const SCROLL_DELAY_MS = 50;
 
+/** Number of characters to reveal per animation frame for smooth typing effect */
+const CHARS_PER_FRAME = 2;
+
+/** Animation frame interval in milliseconds (~30ms for natural typing speed) */
+const ANIMATION_INTERVAL_MS = 30;
+
 /** Welcome tips for Socratic tutoring */
 const WELCOME_TIPS = [
     { icon: MessageCircle, text: "질문을 통해 스스로 답을 찾아가는 과정을 경험하세요" },
@@ -108,15 +114,89 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
     const mTextareaRef = useRef<HTMLTextAreaElement>(null);
 
     /**
-     * Ref to accumulate streaming text tokens.
-     * Using a ref avoids the fragile pattern of calling setMessages
-     * inside a setStreamingText state updater callback.
+     * Ref to accumulate the FULL streaming text (all tokens received so far).
+     * This ref holds the complete text for saving to messages when done.
      */
     const mStreamingTextRef: MutableRefObject<string> = useRef("");
+
+    /**
+     * Buffer for incoming tokens not yet displayed.
+     * Characters are drained from this buffer by the animation loop
+     * to produce a smooth typing effect.
+     */
+    const mTokenBuffer: MutableRefObject<string> = useRef("");
+
+    /**
+     * Text currently rendered on screen (subset of mStreamingTextRef).
+     * The animation loop gradually appends characters from mTokenBuffer.
+     */
+    const mDisplayedText: MutableRefObject<string> = useRef("");
+
+    /**
+     * Handle for the typing animation interval.
+     * Stored so we can clear it when streaming ends or component unmounts.
+     */
+    const mAnimationTimer: MutableRefObject<ReturnType<typeof setInterval> | null> = useRef(null);
 
     // --- Hooks ---
     const { token } = useAuth();
     const router = useRouter();
+
+    /**
+     * Starts the typing animation loop if not already running.
+     * Drains characters from mTokenBuffer into mDisplayedText at a natural pace.
+     */
+    const startAnimationLoop = useCallback(() =>
+    {
+        if (mAnimationTimer.current !== null)
+        {
+            return;
+        }
+
+        mAnimationTimer.current = setInterval(() =>
+        {
+            if (mTokenBuffer.current.length > 0)
+            {
+                const tCharsToReveal = Math.min(CHARS_PER_FRAME, mTokenBuffer.current.length);
+                mDisplayedText.current += mTokenBuffer.current.substring(0, tCharsToReveal);
+                mTokenBuffer.current = mTokenBuffer.current.substring(tCharsToReveal);
+                setStreamingText(mDisplayedText.current);
+            }
+        }, ANIMATION_INTERVAL_MS);
+    }, []);
+
+    /**
+     * Stops the typing animation loop and flushes any remaining buffer immediately.
+     */
+    const stopAnimationLoop = useCallback(() =>
+    {
+        if (mAnimationTimer.current !== null)
+        {
+            clearInterval(mAnimationTimer.current);
+            mAnimationTimer.current = null;
+        }
+
+        // Flush any remaining buffered text instantly
+        if (mTokenBuffer.current.length > 0)
+        {
+            mDisplayedText.current += mTokenBuffer.current;
+            mTokenBuffer.current = "";
+            setStreamingText(mDisplayedText.current);
+        }
+    }, []);
+
+    // Clean up animation timer on unmount
+    useEffect(() =>
+    {
+        return () =>
+        {
+            if (mAnimationTimer.current !== null)
+            {
+                clearInterval(mAnimationTimer.current);
+                mAnimationTimer.current = null;
+            }
+        };
+    }, []);
 
     // --- Derived State ---
     const tSubjectLabel = SUBJECT_LABELS[subject] || subject;
@@ -178,6 +258,8 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
         setIsStreaming(true);
         setStreamingText("");
         mStreamingTextRef.current = "";
+        mTokenBuffer.current = "";
+        mDisplayedText.current = "";
 
         // Reset textarea height
         if (mTextareaRef.current)
@@ -192,9 +274,11 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
             {
                 if (tEvent.type === "token")
                 {
-                    // Accumulate token in ref and sync to display state
+                    // Accumulate full text in ref (for saving to messages later)
                     mStreamingTextRef.current += tEvent.data;
-                    setStreamingText(mStreamingTextRef.current);
+                    // Queue the chunk for gradual typing animation
+                    mTokenBuffer.current += tEvent.data;
+                    startAnimationLoop();
                 }
                 else if (tEvent.type === "analysis")
                 {
@@ -204,6 +288,9 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
                 }
                 else if (tEvent.type === "done")
                 {
+                    // Stop animation and flush any remaining buffered text instantly
+                    stopAnimationLoop();
+
                     // Finalize: read accumulated text from ref and add to messages
                     const tAccumulatedText = mStreamingTextRef.current;
 
@@ -218,6 +305,8 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
 
                     // Clear streaming state
                     mStreamingTextRef.current = "";
+                    mTokenBuffer.current = "";
+                    mDisplayedText.current = "";
                     setStreamingText("");
                     setTurnCount((prev) => prev + 1);
                 }
@@ -229,6 +318,9 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
         }
         catch (error)
         {
+            // Stop animation on error
+            stopAnimationLoop();
+
             // Finalize any partial streaming text on error
             const tPartialText = mStreamingTextRef.current;
 
@@ -243,6 +335,8 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
 
             // Clear streaming state
             mStreamingTextRef.current = "";
+            mTokenBuffer.current = "";
+            mDisplayedText.current = "";
             setStreamingText("");
 
             const tErrorMsg = error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
@@ -257,7 +351,7 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
                 mTextareaRef.current?.focus();
             }, SCROLL_DELAY_MS);
         }
-    }, [token, mIsStreaming, sessionId]);
+    }, [token, mIsStreaming, sessionId, startAnimationLoop, stopAnimationLoop]);
 
     /**
      * Handles Enter key to send (Shift+Enter for newline).
