@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sse_starlette.sse import EventSourceResponse
@@ -366,10 +366,7 @@ async def sendMessage(
         HTTPException 400: If session is not active.
     """
     # 1. 세션 유효성 검증
-    # 게스트는 턴 카운트 증가까지 동시 요청 경합을 막기 위해 행 잠금(FOR UPDATE) 적용.
-    # selectinload는 별도 IN() 쿼리이므로 primary SELECT만 잠기며 Postgres outer join 이슈 없음.
-    # 락은 이 함수의 db.commit() 시점에 해제됨 (Session mode 전환 이력: docs/work_log/03_deployment.md).
-    tSessionQuery = (
+    tResult = await db.execute(
         select(TutoringSession)
         .options(
             selectinload(TutoringSession.mMessages)
@@ -377,10 +374,6 @@ async def sendMessage(
         )
         .where(TutoringSession.mId == sessionId)
     )
-    if currentUser.mIsGuest:
-        tSessionQuery = tSessionQuery.with_for_update()
-
-    tResult = await db.execute(tSessionQuery)
     tSession = tResult.scalar_one_or_none()
 
     if tSession is None:
@@ -408,14 +401,7 @@ async def sendMessage(
             detail=SESSION_NOT_ACTIVE_DETAIL,
         )
 
-    # 2. 게스트 턴 제한 확인
-    if currentUser.mIsGuest and tSession.mTotalTurns >= GUEST_MAX_TURNS:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=GUEST_TURN_LIMIT_DETAIL,
-        )
-
-    # 3. 메시지 내용 유효성 검사
+    # 2. 메시지 내용 유효성 검사 (CAS 증가 전에 먼저 검사하여 무효 요청이 턴을 소비하지 않게 함)
     if not request.content or not request.content.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -428,8 +414,33 @@ async def sendMessage(
             detail=MESSAGE_CONTENT_TOO_LONG_DETAIL,
         )
 
+    # 3. 게스트 턴 제한 원자적 체크 및 증가 (CAS 패턴)
+    # SQLAlchemy async + Supabase Pooler 환경에서 SELECT FOR UPDATE가 동시 요청 직렬화에 실패함을 실측
+    # (docs/work_log/09_sse_and_race_hardening.md 참조).
+    # 대안: DB 레벨 UPDATE ... WHERE mTotalTurns < GUEST_MAX_TURNS ... RETURNING 으로 원자적 check-and-increment.
+    if currentUser.mIsGuest:
+        tAtomicIncrement = (
+            update(TutoringSession)
+            .where(TutoringSession.mId == sessionId)
+            .where(TutoringSession.mTotalTurns < GUEST_MAX_TURNS)
+            .values(mTotalTurns=TutoringSession.mTotalTurns + 1)
+            .returning(TutoringSession.mTotalTurns)
+        )
+        tCasResult = await db.execute(tAtomicIncrement)
+        tIncrementedTurns = tCasResult.scalar_one_or_none()
+        if tIncrementedTurns is None:
+            # UPDATE의 WHERE 조건이 매칭되지 않음 = 이미 5턴 한도 도달
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=GUEST_TURN_LIMIT_DETAIL,
+            )
+        tNewTurnNumber = tIncrementedTurns
+    else:
+        # 비게스트는 턴 제한 없음 — 단순 increment (ORM이 commit 시 flush)
+        tNewTurnNumber = tSession.mTotalTurns + 1
+        tSession.mTotalTurns = tNewTurnNumber
+
     # 4. 사용자 메시지를 DB에 저장
-    tNewTurnNumber = tSession.mTotalTurns + 1
     tUserMessage = Message()
     tUserMessage.mSessionId = sessionId
     tUserMessage.mRole = MessageRole.USER
@@ -437,9 +448,6 @@ async def sendMessage(
     tUserMessage.mTurnNumber = tNewTurnNumber
 
     db.add(tUserMessage)
-
-    # 턴 카운트를 즉시 업데이트 (게스트 턴 제한 레이스 조건 방지)
-    tSession.mTotalTurns = tNewTurnNumber
     await db.flush()
 
     # 4. 세션 히스토리 구축 (기존 메시지들)
