@@ -368,7 +368,7 @@ async def sendMessage(
     # 1. 세션 유효성 검증
     # 게스트는 턴 카운트 증가까지 동시 요청 경합을 막기 위해 행 잠금(FOR UPDATE) 적용.
     # selectinload는 별도 IN() 쿼리이므로 primary SELECT만 잠기며 Postgres outer join 이슈 없음.
-    # Supabase Pooler Session mode(port 5432)에서 락은 db.commit()(line 479)까지 유지됨.
+    # 락은 이 함수의 db.commit() 시점에 해제됨 (Session mode 전환 이력: docs/work_log/03_deployment.md).
     tSessionQuery = (
         select(TutoringSession)
         .options(
