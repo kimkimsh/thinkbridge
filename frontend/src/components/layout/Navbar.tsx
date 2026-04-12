@@ -18,6 +18,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LogOut, User, ChevronDown, Brain } from "lucide-react";
+import { MobileMenu } from "@/components/layout/MobileMenu";
 
 
 // --- Constants ---
@@ -47,13 +48,17 @@ export function Navbar()
     return (
         <nav className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
             <div className="flex h-14 items-center justify-between px-4 md:px-6">
-                {/* Logo */}
-                <Link href={tLogoHref} className="flex items-center gap-2">
-                    <Brain className="h-6 w-6 text-blue-600" />
-                    <span className="text-lg font-bold text-gray-900">
-                        ThinkBridge
-                    </span>
-                </Link>
+                {/* Left cluster: mobile menu trigger (mobile only) + logo */}
+                <div className="flex items-center gap-2">
+                    {/* Mobile hamburger lives inside Navbar so it never overlaps page content (replaces prior bottom-floating button). */}
+                    <MobileMenu />
+                    <Link href={tLogoHref} className="flex items-center gap-2">
+                        <Brain className="h-6 w-6 text-blue-600" />
+                        <span className="text-lg font-bold text-gray-900">
+                            ThinkBridge
+                        </span>
+                    </Link>
+                </div>
 
                 {/* Right side: auth-dependent */}
                 <div className="flex items-center gap-3">

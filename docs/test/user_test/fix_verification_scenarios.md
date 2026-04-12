@@ -50,7 +50,7 @@
 | B.4 | 세션 목록 completed 카드 "리포트" 명시 버튼 | `d8ff223` | V.9 | Easy (세션 목록 방문) |
 | B.5 | 강사 리플레이 헤더 학생명/과목/주제/세션 ID | `7a95eaf` | V.10 | Easy (대시보드 → 학생 클릭) |
 | C.1 | 종료 버튼 4-state (base/hover/active/disabled) | `36dd331` | V.11 | Medium (여러 상태 전환) |
-| C.2 | 모바일 햄버거 `/student/chat`에서만 좌하단 | `ee8849d` | V.12 | Easy (Device Toolbar 390px) |
+| C.2 | 모바일 햄버거 상단 Navbar 고정 (전 페이지 공통) | `ee8849d` → v1.3 재설계 | V.12 | Easy (Device Toolbar 390px) |
 | **D.1** | **채팅 튜토리얼 오버레이 (7 steps, auto + ? re-launch)** | `e16fec7` / `5badfb7` | V.16 | Medium (동적 타겟 + localStorage) |
 | **D.1** | 세션 목록 튜토리얼 (3 steps, 첫 카드 하이라이트) | `e16fec7` / `5badfb7` | V.17 | Easy |
 | **D.1** | 강사 대시보드 튜토리얼 (4 steps) | `e16fec7` / `5badfb7` | V.18 | Easy |
@@ -449,38 +449,49 @@
 
 ---
 
-### V.12 — C.2: 모바일 햄버거 `/student/chat`에서만 좌하단 배치
+### V.12 — C.2: 모바일 햄버거 상단 Navbar 고정 (전 페이지 공통) — **v1.3 재설계**
 
-**목적**: 채팅 페이지의 입력 바 우측 Send/종료 버튼과 모바일 햄버거가 겹치지 않도록 위치 조건부 변경
-**선행 조건**: 학생 로그인 + DevTools Device Toolbar 모바일 뷰포트
-**이전 버그**: 모바일 채팅 페이지에서 햄버거(`bottom-4 right-4`)와 입력 바 Send/종료 버튼이 겹쳐 터치 불가
-**기대 결과**: `/student/chat` 에서만 `bottom-4 left-4` (좌하단), 그 외 페이지는 기본 `bottom-4 right-4` (우하단)
+**목적**: 모바일에서 햄버거 버튼을 하단 floating 이 아닌 **상단 Navbar 좌측(로고 앞)에 고정 배치**. 모든 페이지에서 위치가 일관되고, 어떤 하단 컨텐츠(채팅 입력 바, 세션 카드, 플로팅 ThoughtPanel 등)도 가리지 않음.
+**선행 조건**: 학생/강사/관리자 중 로그인 + DevTools Device Toolbar 모바일 뷰포트
+**이전 버그 (v1.2까지)**: 모바일 햄버거가 `bottom-4 {left|right}-4` 로 하단 floating → 페이지마다 위치가 달라지고, 어떤 페이지에선 컨텐츠를 가림. 채팅 페이지에선 좌하단, 그 외 페이지에선 우하단 이라는 불일치한 경험.
+**기대 결과**: 모든 페이지에서 햄버거가 Navbar 좌측 (로고 바로 앞) 에 고정. md 이상 뷰포트에서는 자동 숨김 + 데스크톱 사이드바 대체.
+
+**관련 구현 변경** (2026-04-13, `feat(layout): ...`):
+- `MobileMenu` 컴포넌트 신설 (`frontend/src/components/layout/MobileMenu.tsx`) — Sheet + 햄버거 트리거 캡슐화
+- `Navbar.tsx` 좌측에 `<MobileMenu />` 렌더 (`md:hidden` 버튼 + Sheet side="left" 슬라이드인)
+- `Sidebar.tsx` 단순화 → 데스크톱 전용 (이전 `HAMBURGER_CHAT_POSITION` / `HAMBURGER_DEFAULT_POSITION` / `CHAT_PAGE_PATH` 분기 로직 모두 삭제)
 
 - [ ] 단계 1: DevTools → Device Toolbar (Ctrl+Shift+M) → **iPhone 14 Pro (390×844)** 선택
-  - 기대: 뷰포트가 390px 폭으로 축소
+  - 기대: 뷰포트 390px 폭
 - [ ] 단계 2: 학생 로그인 후 `/student/chat` 진입 (주제 선택 카드 or ChatInterface)
   - 기대: 페이지 렌더
-- [ ] 단계 3: 햄버거 버튼 위치 확인
-  - 기대: `fixed z-50 md:hidden bottom-4 left-4` (좌하단) — `HAMBURGER_CHAT_POSITION`
-- [ ] 단계 4: 입력창 우측의 Send / 종료 / 힌트 버튼 클러스터와 **겹치지 않음** 확인
-  - 기대: 햄버거는 좌측 하단, 버튼 클러스터는 우측 입력바 내부 — 시각적으로 격리됨
-- [ ] 단계 5: 햄버거 클릭 → Sheet 슬라이드인
-  - 기대: 좌측에서 `w-64` Sheet 등장 (`SheetContent side="left"`) — 네비 아이템 렌더
-- [ ] 단계 6: Sheet의 "세션 목록" 클릭 → `/student/sessions` 이동
-  - 기대: 세션 목록 페이지 렌더
-- [ ] 단계 7: 세션 목록에서 햄버거 위치 확인
-  - 기대: `fixed bottom-4 right-4 z-50 md:hidden` (우하단) — `HAMBURGER_DEFAULT_POSITION`
-- [ ] 단계 8: `/student/report/{id}` 진입 (완료 세션에서 리포트 버튼) → 햄버거 위치 확인
-  - 기대: 우하단 `bottom-4 right-4`
-- [ ] 단계 9: Device Toolbar 해제 (데스크톱 뷰포트 복귀)
-  - 기대: 햄버거 숨김 (`md:hidden` → md 이상에서 숨겨짐), 데스크톱 사이드바 표시
-- [ ] 단계 10: DevTools Elements 에서 햄버거 컨테이너 클래스 확인
-  - 기대: `cn("fixed z-50 md:hidden", tHamburgerPositionClass)` — pathname에 따라 `bottom-4 left-4` 또는 `bottom-4 right-4`
+- [ ] 단계 3: Navbar 좌측 햄버거 위치 확인
+  - 기대: `Menu` 아이콘 버튼이 Navbar 내부 좌상단 (sticky top-0 z-50), `aria-label="메뉴 열기"`, 로고 바로 앞 (gap-2)
+  - 상세: Navbar 높이 56px, 버튼 36×36 ghost style (`variant="ghost" size="icon" h-9 w-9`)
+- [ ] 단계 4: **기존 하단 floating 버튼 완전 제거** 확인
+  - 기대: DevTools → `document.querySelectorAll('[class*="fixed"][class*="bottom-4"]')` 결과 0건 — 어디에도 bottom-floating 햄버거 없음
+- [ ] 단계 5: 입력 바 Send/종료/힌트 버튼 클러스터와 공존 확인
+  - 기대: 하단 입력 바는 원래대로 동작, 상단 햄버거와 겹침 없음 — 페이지 어떤 영역도 가리지 않음
+- [ ] 단계 6: 햄버거 클릭 → Sheet 슬라이드인
+  - 기대: 좌측에서 `w-64` Sheet 등장 + 네비 아이템 (학생: "채팅" / "세션 목록") 렌더 + `SheetHeader` 의 "네비게이션" `sr-only` 타이틀
+- [ ] 단계 7: Sheet의 "세션 목록" 클릭 → `/student/sessions` 이동
+  - 기대: 세션 목록 페이지 렌더 + Sheet 자동 닫힘 (`onItemClick={() => setIsOpen(false)}`)
+- [ ] 단계 8: 세션 목록에서 햄버거 위치 재확인
+  - 기대: **동일한 Navbar 좌측 위치** — 페이지별 위치 분기 없음 (단순성)
+- [ ] 단계 9: `/student/report/{id}` 진입 → 햄버거 위치 재확인
+  - 기대: 동일 Navbar 좌측 위치
+- [ ] 단계 10: 강사/관리자 계정으로 동일 플로우 반복
+  - 기대: Navbar 좌측 햄버거 등장 + Sheet 내부 네비는 역할별 (`/instructor/dashboard` 또는 `/admin/dashboard`)
+- [ ] 단계 11: Device Toolbar 해제 (데스크톱 뷰포트 복귀)
+  - 기대: 햄버거 숨김 (`md:hidden` + `button` 의 `md:hidden` 이중 가드), 데스크톱 사이드바 `aside.md:flex md:w-56` 표시
+- [ ] 단계 12: DevTools Elements 에서 햄버거 버튼 클래스 확인
+  - 기대: `md:hidden h-9 w-9 text-gray-700 hover:bg-gray-100` + Button `variant="ghost"` 공통 클래스
 
-**합격 기준**: 8/10 이상
+**합격 기준**: 10/12 이상
 **비고**:
-- `CHAT_PAGE_PATH = "/student/chat"` 정확 비교 (`pathname === CHAT_PAGE_PATH`) — subpath는 매칭 안됨.
-- 좌하단 선택 이유: 채팅 입력 바가 하단 strip을 우측에만 차지하므로 좌하단은 엄지 터치 범위 내 + 시각 밸런스.
+- v1.2 까지 존재하던 `HAMBURGER_CHAT_POSITION`, `HAMBURGER_DEFAULT_POSITION`, `CHAT_PAGE_PATH` 상수/분기는 모두 삭제되었다. 모바일 모든 페이지가 동일 상단 고정 UX.
+- Sheet 내부 NavList 는 `Sidebar.tsx` 에서 export 된 공용 `NavList` + `getNavItemsForRole` 재사용 — 데스크톱 사이드바와 모바일 Sheet 가 같은 source-of-truth 를 공유.
+- Navbar 좌측 클러스터는 `<div className="flex items-center gap-2">{MobileMenu}{Logo}</div>` — MobileMenu 는 비로그인 상태에서 null 을 렌더하므로 로그인 여부와 무관하게 로고 정렬이 깨지지 않음.
 
 ---
 
@@ -1091,10 +1102,11 @@
 2. **체크**: `/student/chat` 이동 (기본 `/` 아님)
 3. 강사 계정으로 전환 → 같은 확인
 
-### Step 5: 모바일 햄버거 위치 (V.12 축약)
+### Step 5: 모바일 햄버거 위치 (V.12 축약) — v1.3 재설계 반영
 1. Device Toolbar → iPhone 14 Pro
-2. `/student/chat` 햄버거 위치 = 좌하단, `/student/sessions` = 우하단
-3. **체크**: 채팅 페이지에서 Send/종료 버튼과 햄버거가 겹치지 않음
+2. 학생 로그인 후 어떤 페이지(`/student/chat`, `/student/sessions`, `/student/report/*`)로 진입해도
+3. **체크**: Navbar 좌측 (로고 앞) 에 햄버거 아이콘이 고정 — 하단 floating 없음, 페이지 컨텐츠 전혀 가리지 않음
+4. 햄버거 클릭 → 좌측 Sheet 슬라이드인 → 네비 아이템 렌더 → 아이템 클릭 시 Sheet 자동 닫힘
 
 ### Step 6: 튜토리얼 auto-trigger + ? 재실행 (V.16/V.20 축약)
 1. DevTools Application → LocalStorage → `thinkbridge_tutorial_chat_v1` 삭제
@@ -1225,5 +1237,6 @@ V.19 (admin 4 steps) ──────┤
 | 2026-04-12 | v1.0 최초 작성 — 12 이슈 × 15 시나리오 (A.1-A.4 / B.1-B.5 / C.1-C.2 + 통합 3) | ThinkBridge Team |
 | 2026-04-12 | v1.1 — 튜토리얼 D.1 (10 시나리오 V.16-V.25) 추가. commits `e16fec7` (Phase 2 core) + `514d190` (work log) + `5badfb7` (Phase 3 integration). 총 시나리오 25개. §4 신설, 기존 §4/§5 → §5/§6 로 renumber. 최종 체크리스트 + 스모크(Step 6) + 의존성 다이어그램 + 권장 실행 순서 업데이트. | ThinkBridge Team |
 | 2026-04-12 | v1.2 — Playwright 자동 테스트 반영. V.25 단계 8 `?` 버튼 동작이 **disable 키 존중 (차단)** 으로 정정 (자동 테스트 결과 실 구현과 원시나리오 가정 불일치 발견). 결과 보고서 `fix_verification_automated_results.md` + 잔여 수동 체크리스트 `fix_verification_manual_remaining.md` 추가. | ThinkBridge Team |
+| 2026-04-13 | v1.3 — 모바일 햄버거 위치 재설계: **하단 floating → 상단 Navbar 좌측 고정**. `MobileMenu` 컴포넌트 신설, `Sidebar` 는 데스크톱 전용으로 단순화, `Navbar` 좌측에 MobileMenu 렌더. 시나리오 V.12 및 축약 스모크 Step 5 전면 재작성 (이전의 `/student/chat` 좌하단 / 그 외 우하단 분기 삭제). 추가로 `/student/chat` ChatInterface 에 `TutorialButton` 누락 보완 (work log 19). 로그인 페이지 "처음 화면으로" 뒤로가기 링크 추가 (work log 18). | ThinkBridge Team |
 
 후속 fix batch가 있다면 별도 `fix_verification_scenarios_v2.md` 로 작성하거나 본 문서에 이어붙이기.
