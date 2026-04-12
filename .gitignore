@@ -53,3 +53,7 @@ LIVE_ACCESS.md
 
 # Playwright MCP output (browser automation artifacts)
 .playwright-mcp/
+
+# Vercel CLI local linkage (frontend deploys via .vercel/project.json)
+.vercel/
+frontend/.vercel/
