@@ -7,7 +7,7 @@
  * Supports guest mode with turn-limited badge.
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { MessageCircle, BookOpen, FlaskConical, PenLine, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -89,10 +89,13 @@ const TOPIC_PLACEHOLDERS: Record<string, string> = {
 /** Default topic placeholder */
 const DEFAULT_TOPIC_PLACEHOLDER = "학습하고 싶은 주제를 입력하세요";
 
+/** Suspense fallback placeholder text */
+const SUSPENSE_FALLBACK_TEXT = "로딩 중...";
 
-// --- Component ---
 
-export default function StudentChatPage()
+// --- Inner Component (uses useSearchParams) ---
+
+function ChatPageInner()
 {
     // --- State ---
     const [mSelectedSubject, setSelectedSubject] = useState<string>("math");
@@ -341,5 +344,41 @@ export default function StudentChatPage()
                 </CardContent>
             </Card>
         </div>
+    );
+}
+
+
+// --- Suspense Fallback ---
+
+/**
+ * Lightweight skeleton shown while ChatPageInner's useSearchParams
+ * resolves during SSR/streaming. Matches the calm aesthetic of the
+ * full chat layout without loading any dynamic data.
+ */
+function ChatPageSkeleton()
+{
+    return (
+        <div className="min-h-screen flex items-center justify-center">
+            <div className="animate-pulse text-gray-500">
+                {SUSPENSE_FALLBACK_TEXT}
+            </div>
+        </div>
+    );
+}
+
+
+// --- Default Export (Suspense wrapper) ---
+
+/**
+ * Next.js 14 요구사항: useSearchParams를 사용하는 클라이언트
+ * 컴포넌트는 반드시 Suspense 경계로 감싸야 한다.
+ * 그렇지 않으면 빌드 시 CSR 바인딩 오류가 발생할 수 있다.
+ */
+export default function StudentChatPage()
+{
+    return (
+        <Suspense fallback={<ChatPageSkeleton />}>
+            <ChatPageInner />
+        </Suspense>
     );
 }
