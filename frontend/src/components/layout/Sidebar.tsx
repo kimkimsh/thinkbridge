@@ -44,6 +44,19 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
     { label: "대시보드", href: "/admin/dashboard", icon: LayoutDashboard },
 ];
 
+/**
+ * 채팅 페이지 경로.
+ * 모바일 햄버거가 입력 바 우측의 Send/종료 버튼과 겹치지 않도록
+ * 이 경로에서만 햄버거를 좌하단으로 옮긴다.
+ */
+const CHAT_PAGE_PATH = "/student/chat";
+
+/** 햄버거 기본 위치 — 우하단 (대부분의 페이지) */
+const HAMBURGER_DEFAULT_POSITION = "bottom-4 right-4";
+
+/** 채팅 페이지 한정 햄버거 위치 — 좌하단 (입력 바 우측 버튼과 충돌 회피) */
+const HAMBURGER_CHAT_POSITION = "bottom-4 left-4";
+
 /** Returns navigation items based on user role */
 function getNavItemsForRole(role: string): NavItem[]
 {
@@ -130,6 +143,9 @@ export function Sidebar()
     }
 
     const tNavItems = getNavItemsForRole(user.role);
+    // 채팅 페이지에서는 햄버거를 좌하단으로 이동하여 입력 바 우측의 Send/종료 버튼과 겹치지 않도록 한다.
+    const tIsChatPage = pathname === CHAT_PAGE_PATH;
+    const tHamburgerPositionClass = tIsChatPage ? HAMBURGER_CHAT_POSITION : HAMBURGER_DEFAULT_POSITION;
 
     return (
         <>
@@ -144,8 +160,8 @@ export function Sidebar()
                 <NavList items={tNavItems} pathname={pathname} />
             </aside>
 
-            {/* Mobile hamburger + Sheet */}
-            <div className="fixed bottom-4 right-4 z-50 md:hidden">
+            {/* Mobile hamburger + Sheet — 위치는 페이지별 조건부 (채팅 페이지에서는 좌하단) */}
+            <div className={cn("fixed z-50 md:hidden", tHamburgerPositionClass)}>
                 <Sheet open={mIsOpen} onOpenChange={setIsOpen}>
                     <SheetTrigger asChild>
                         <Button
