@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Noto_Sans_KR } from "next/font/google";
 import { AuthProvider } from "@/lib/auth";
+import { TutorialProvider } from "@/lib/tutorial";
+import { TutorialOverlay } from "@/components/tutorial/TutorialOverlay";
 import "./globals.css";
 
 
@@ -35,7 +37,10 @@ export default function RootLayout({
         <html lang="ko" className={notoSansKR.variable}>
             <body className={`${notoSansKR.className} antialiased`}>
                 <AuthProvider>
-                    {children}
+                    <TutorialProvider>
+                        {children}
+                        <TutorialOverlay />
+                    </TutorialProvider>
                 </AuthProvider>
             </body>
         </html>
