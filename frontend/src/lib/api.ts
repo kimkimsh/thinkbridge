@@ -26,6 +26,11 @@ import type {
 // --- Error Constants ---
 
 const ERROR_STREAM_NO_BODY = "서버 응답에 스트림 본문이 없습니다.";
+const ERROR_EMPTY_BODY = "서버 응답이 비어있습니다.";
+const ERROR_NON_JSON = "서버 응답이 JSON 형식이 아닙니다.";
+
+/** HTML/텍스트 에러 응답을 에러 메시지에 포함시킬 때 최대 표시 길이 */
+const ERROR_BODY_PREVIEW_MAX_LENGTH = 100;
 
 
 // --- SSE Parsing Constants ---
@@ -103,25 +108,45 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 
     const tResponse = await fetch(`${API_URL}${path}`, tFetchOptions);
 
+    // Response body는 한 번만 소비 가능하므로 text()로 먼저 읽은 뒤 분기 처리.
+    // Render 프리 티어 슬립 시 5xx HTML 페이지 반환 → JSON 파싱 실패로 크래시하던 문제 방어.
+    const tRawText = await tResponse.text();
+
     if (!tResponse.ok)
     {
         let tErrorMessage = `HTTP ${tResponse.status}`;
-        try
+        if (tRawText)
         {
-            const tErrorData = await tResponse.json();
-            if (tErrorData.detail)
+            try
             {
-                tErrorMessage = tErrorData.detail;
+                const tErrorData = JSON.parse(tRawText);
+                if (tErrorData.detail)
+                {
+                    tErrorMessage = tErrorData.detail;
+                }
             }
-        }
-        catch
-        {
-            // 응답 본문이 JSON이 아닌 경우 기본 에러 메시지 사용
+            catch
+            {
+                // HTML 등 JSON이 아닌 응답 — 원문 일부를 진단용으로 포함
+                tErrorMessage = `${tErrorMessage}: ${tRawText.slice(0, ERROR_BODY_PREVIEW_MAX_LENGTH)}`;
+            }
         }
         throw new Error(tErrorMessage);
     }
 
-    return tResponse.json() as Promise<T>;
+    if (!tRawText)
+    {
+        throw new Error(ERROR_EMPTY_BODY);
+    }
+
+    try
+    {
+        return JSON.parse(tRawText) as T;
+    }
+    catch
+    {
+        throw new Error(ERROR_NON_JSON);
+    }
 }
 
 
@@ -264,15 +289,28 @@ export async function* streamMessages(
         let tErrorMessage = `HTTP ${tResponse.status}`;
         try
         {
-            const tErrorData = await tResponse.json();
-            if (tErrorData.detail)
+            // 에러 응답도 text() 한 번 읽고 JSON 파싱 시도 (HTML 오류 페이지 방어).
+            const tErrorText = await tResponse.text();
+            if (tErrorText)
             {
-                tErrorMessage = tErrorData.detail;
+                try
+                {
+                    const tErrorData = JSON.parse(tErrorText);
+                    if (tErrorData.detail)
+                    {
+                        tErrorMessage = tErrorData.detail;
+                    }
+                }
+                catch
+                {
+                    // HTML 등 JSON이 아닌 에러 응답 — 원문 일부 포함
+                    tErrorMessage = `${tErrorMessage}: ${tErrorText.slice(0, ERROR_BODY_PREVIEW_MAX_LENGTH)}`;
+                }
             }
         }
         catch
         {
-            // JSON이 아닌 에러 응답
+            // text() 자체 실패 (네트워크 끊김 등) — 기본 HTTP 메시지 유지
         }
         throw new Error(tErrorMessage);
     }
