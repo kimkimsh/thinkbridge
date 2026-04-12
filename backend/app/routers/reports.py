@@ -16,7 +16,6 @@ from app.models.session import TutoringSession
 from app.models.report import Report
 from app.schemas.report import ReportResponse, GrowthTrendEntry
 from app.services.report_generator import (
-    generateSessionReport,
     getStudentGrowthTrend,
 )
 
@@ -32,6 +31,7 @@ SESSION_NOT_FOUND_DETAIL = "세션을 찾을 수 없습니다"
 SESSION_ACCESS_DENIED_DETAIL = "해당 세션의 리포트에 대한 접근 권한이 없습니다"
 STUDENT_ACCESS_DENIED_DETAIL = "해당 학생의 성장 데이터에 대한 접근 권한이 없습니다"
 REPORT_GENERATION_FAILED_DETAIL = "리포트 생성에 실패했습니다"
+REPORT_NOT_READY_DETAIL = "리포트가 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요."
 
 
 # --- Helper functions ---
@@ -73,14 +73,15 @@ async def getSessionReport(
     db: AsyncSession = Depends(get_db),
 ) -> ReportResponse:
     """
-    세션 리포트 조회 - 리포트가 없으면 자동 생성
-    Retrieve the report for a session. If no report exists yet, generate one.
+    세션 리포트 조회 — endSession에서 이미 생성됨. 없으면 아직 준비 안 된 것.
+    Retrieves a pre-generated session report. endSession eagerly triggers
+    report creation; this endpoint intentionally does NOT auto-create to
+    avoid IntegrityError races when multiple tabs poll simultaneously.
     Accessible by session owner, instructor, or admin.
 
     Raises:
-        HTTPException 404: If session not found.
+        HTTPException 404: If session not found, or report not yet generated.
         HTTPException 403: If user has no access to this session's report.
-        HTTPException 500: If report generation fails.
     """
     # 세션 존재 여부 및 소유자 확인
     tSessionResult = await db.execute(
@@ -102,28 +103,17 @@ async def getSessionReport(
             detail=SESSION_ACCESS_DENIED_DETAIL,
         )
 
-    # 기존 리포트 조회
+    # 기존 리포트 조회 — 레이스를 피하기 위해 자동 생성은 수행하지 않음
     tReportResult = await db.execute(
         select(Report).where(Report.mSessionId == sessionId)
     )
     tReport = tReportResult.scalar_one_or_none()
 
-    # 리포트가 없으면 자동 생성
     if tReport is None:
-        try:
-            tReport = await generateSessionReport(
-                sessionId=sessionId,
-                db=db,
-            )
-        except Exception as tError:
-            logger.error(
-                "Report generation failed for session %d: %s",
-                sessionId, tError,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=REPORT_GENERATION_FAILED_DETAIL,
-            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=REPORT_NOT_READY_DETAIL,
+        )
 
     return _buildReportResponse(tReport)
 
