@@ -47,3 +47,9 @@ out/
 
 # Docker
 docker-compose.override.yml
+
+# Local access / credentials (do NOT track)
+LIVE_ACCESS.md
+
+# Playwright MCP output (browser automation artifacts)
+.playwright-mcp/

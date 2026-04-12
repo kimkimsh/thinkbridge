@@ -1,114 +1,238 @@
-# ThinkBridge - AI 소크라테스식 튜터링 시스템
+# ThinkBridge — AI 소크라테스식 튜터링 시스템
 
 > "AI가 답을 주는 시대, 생각하는 법을 가르치는 AI"
+>
+> **2026 KIT 바이브코딩 공모전 출품작**
 
-## 프로젝트 소개
+---
 
-ThinkBridge는 AI가 절대 정답을 제공하지 않고, 소크라테스식 질문법으로 학생의 사고를 유도하는 1:1 튜터링 시스템입니다.
+## 🎯 프로젝트 개요
 
-- 학생이 질문하면 AI가 되물으며 사고를 확장시킵니다
-- 6차원 사고 분석 프레임워크(블룸의 개정판 분류체계)로 실시간 분석
-- 세션 종료 시 자동 리포트 생성 (레이더 차트 + 성장 추이)
-- 교수자 대시보드로 학생 현황 모니터링
+ThinkBridge는 **AI가 절대 정답을 제공하지 않고**, 소크라테스식 질문법으로 학생 스스로 답에 도달하도록 이끄는 1:1 AI 튜터링 시스템입니다. 기존 AI 챗봇이 "답을 주는 도구"라면, ThinkBridge는 "생각을 키우는 동반자"를 지향합니다.
 
-## 라이브 URL
+### 기존 AI 챗봇과의 차이
 
-- **Frontend**: (배포 후 업데이트 예정)
-- **Backend API**: (배포 후 업데이트 예정)
+| 항목 | 기존 AI 챗봇 (ChatGPT 등) | ThinkBridge |
+|------|--------------------------|-------------|
+| 답변 방식 | 정답 직접 제공 | 소크라테스식 질문으로 유도 |
+| 사고 분석 | 없음 | 블룸의 개정판 분류체계 기반 6차원 실시간 분석 |
+| 학습 경로 | 단발성 QA | 5단계 소크라테스 진행 (명확화→탐색→유도→검증→확장) |
+| 교강사 도구 | 없음 | 반별 대시보드 + 사고력 히트맵 + 세션 리플레이 |
+| 리포트 | 없음 | 레이더 차트 + 성장 추이 + AI 서술형 요약 |
 
-## 데모 계정
+---
 
-| 역할 | 이메일 | 비밀번호 |
-|------|--------|----------|
-| 학생 | student@demo.com | demo1234 |
-| 교수자 | instructor@demo.com | demo1234 |
-| 관리자 | admin@demo.com | demo1234 |
+## 👥 주요 기능 (4 역할)
 
-**게스트 체험**: 로그인 없이 "바로 체험하기"로 5턴 체험 가능
+### 🎓 학생 (Student)
+- **소크라테스식 AI 채팅** — 실시간 SSE 스트리밍 (토큰 단위 타이핑 애니메이션)
+- **실시간 6차원 사고 분석 패널** — 매 턴마다 업데이트, 접힘/펼침 지원
+- **5단계 진행 바** — 명확화 → 탐색 → 유도 → 검증 → 확장
+- **힌트 요청** — 어려울 때 더 구체적인 유도 질문 요청
+- **학습 리포트** — 세션 종료 시 자동 생성 (Radar + Growth Trend + Timeline + AI 내러티브)
+- **세션 히스토리** — 과거 대화 재접근 및 리포트 확인
 
-## 아키텍처
+### 👨‍🏫 교강사 (Instructor)
+- **반별 대시보드** — 반 선택 드롭다운 + 4개 Summary Card (총 학생/평균 세션/활성률/평균 점수)
+- **사고력 히트맵** — 학생×6차원 매트릭스 (빨강/노랑/초록 3단계) + AI 인사이트 자동 생성
+- **학생 목록** — 점수 뱃지 (평균 기반 색상 구분) + 클릭 시 세션 리플레이
+- **세션 리플레이** — 턴별 메시지 + 분석 패널 동기화 (좌측 세션 목록 / 중앙 메시지 / 우측 ThoughtPanel)
+
+### 🛡️ 운영자 (Admin)
+- **전체 통계 카드** — 총 학생, 총 세션, 전체 평균, 활성률
+- **반별 비교 BarChart** — 3개 반 × 6차원 사고력
+- **과목별 RadarChart** — 수학/과학/논술 overlay 비교
+- **Demo Data Banner** — 시드 데이터 기반임을 명시
+
+### 🚀 게스트 (Guest — 회원가입 없음)
+- **5턴 무료 체험** — 랜딩 "바로 체험하기" 원클릭 진입
+- **CAS 패턴 race 방어** — DB 레벨 atomic `UPDATE ... WHERE total_turns < 5 ... RETURNING`
+- **전용 프롬프트** (`GUEST_SOCRATIC_PROMPT`) — 5턴 내 Stage 1→3 압축 진행
+- **회원가입 전환 CTA** — 5턴 소진 시 "계속하려면 회원가입이 필요합니다"
+
+---
+
+## 🏗️ 아키텍처
 
 ```
-[Browser] --> [Vercel: Next.js 14 Frontend]
-                      |
-                      | REST + SSE (fetch ReadableStream)
-                      v
-              [Render: FastAPI Backend] <-- UptimeRobot 5min ping
-                      |
-              +-------+-------+
-              |               |
-    [Claude API]      [Supabase PostgreSQL]
-    (Tool Use + text)
+[Browser]
+    │
+    │ HTTPS
+    ▼
+[Vercel: Next.js 14 Frontend]
+    │
+    │ REST + SSE (fetch + ReadableStream)
+    ▼
+[Render: FastAPI Backend]  ◀── UptimeRobot 5분 ping (cold start 방지)
+    │
+    ├──► [Supabase PostgreSQL]  (Session mode pooler, port 5432)
+    │
+    └──► [Anthropic Claude API]  (Tool Use 1-tool + text 패턴)
 ```
 
-## 기술 스택
+### 기술 스택
 
 | 레이어 | 기술 |
 |--------|------|
-| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS, shadcn/ui, Recharts |
-| Backend | FastAPI (Python), SQLAlchemy 2.0 (async), Pydantic v2 |
-| AI | Claude API + Tool Use (1-tool + text 패턴) |
-| DB | Supabase PostgreSQL |
-| 배포 FE | Vercel |
-| 배포 BE | Render + UptimeRobot |
-| 인증 | Custom JWT + 게스트 모드 |
+| Frontend | Next.js 14 (App Router, TypeScript strict), Tailwind CSS, shadcn/ui, Recharts, lucide-react |
+| Backend | FastAPI (Python 3.12), SQLAlchemy 2.0 async, asyncpg, Pydantic v2, sse-starlette |
+| AI | Anthropic SDK 0.34.2 (Claude Sonnet, Tool Use + Streaming) |
+| DB | Supabase PostgreSQL (async) |
+| 배포 FE | Vercel (GitHub App 자동 배포) |
+| 배포 BE | Render (Docker) + UptimeRobot 5분 ping |
+| 인증 | Custom JWT (python-jose) + 게스트 모드 |
+| 로깅 | stdlib logging + Render logs |
 
-## 6차원 사고 분석 프레임워크
+---
 
-블룸의 개정판 분류체계(Bloom's Revised Taxonomy) 기반:
+## 🤖 AI 아키텍처 (1-Tool + Text 패턴)
 
-1. **문제 이해** (Understand)
-2. **전제 확인** (Remember/Understand)
-3. **논리 구조화** (Analyze)
-4. **근거 제시** (Apply)
-5. **비판적 사고** (Evaluate)
-6. **창의적 사고** (Create)
-
-## 주요 기능
-
-### 학생 (Student)
-- **소크라테스식 AI 채팅**: 실시간 SSE 스트리밍으로 AI 튜터와 대화
-- **실시간 사고 분석 패널**: 6차원 사고력 점수가 매 턴마다 업데이트
-- **5단계 소크라테스 진행 바**: 명확화→탐색→유도→검증→확장
-- **힌트 요청**: 어려울 때 더 구체적인 유도 질문 요청
-- **학습 리포트**: 레이더 차트 + 성장 추이 + AI 서술형 요약
-- **게스트 체험**: 회원가입 없이 5턴 체험
-
-### 교강사 (Instructor)
-- **반별 대시보드**: 수업 현황 카드 + 학생 목록
-- **사고력 히트맵**: 학생×6차원 매트릭스 + AI 인사이트
-- **세션 리플레이**: 학생의 대화 과정을 턴별 분석과 함께 재생
-
-### 운영자 (Admin)
-- **전체 현황 카드**: 총 학생, 총 세션, 전체 평균, 활성률
-- **반별 비교 바 차트**: 3개 반의 6차원 사고력 비교
-- **과목별 레이더**: 수학 vs 과학 vs 논술 사고력 프로필 비교
-
-## AI 아키텍처 (1-Tool + Text 패턴)
+**핵심 혁신**: 1회 Claude API 호출로 응답 + 분석을 동시 획득.
 
 ```
-1회 Claude API 호출:
-  [text block]     → 소크라테스식 유도 질문 (실시간 스트리밍)
-  [tool_use block] → 6차원 사고 분석 JSON (완료 시 파싱)
-
-3단계 폴백:
-  1. 도구 미호출 → 기본 분석 (all 5)
-  2. JSON 파싱 실패 → 기본 분석 + 로그
-  3. API 오류 → 에러 이벤트 전송
+Claude Response:
+  [text block]     → 소크라테스식 유도 질문 (토큰 단위 실시간 스트리밍)
+  [tool_use block] → analyze_thinking JSON (6차원 점수 + stage + patterns + engagement)
+                      │
+                      └─► 완료 시 파싱하여 ThoughtPanel/DB 저장
 ```
 
-## 로컬 개발 환경 설정
+### 6차원 사고 분석 프레임워크 (Bloom's Revised Taxonomy)
+
+| 차원 | 블룸 단계 | 측정 |
+|------|---------|------|
+| 문제 이해 | Understand | 문제를 명확히 파악하는지 |
+| 전제 확인 | Remember/Understand | 숨은 가정/조건 인식 |
+| 논리 구조화 | Analyze | 단계적 사고 전개 |
+| 근거 제시 | Apply | 주장에 대한 근거 제공 |
+| 비판적 사고 | Evaluate | 대안 검토 + 반례 생각 |
+| 창의적 사고 | Create | 새로운 접근법 발견 |
+
+### 3단계 Fallback
+
+1. **Tool 미호출** → `DEFAULT_ANALYSIS` (all scores=5) + 로그 경고
+2. **JSON 파싱 실패** → 동일 기본값 + 에러 로깅
+3. **API 5xx/timeout** → exponential backoff 재시도 (529 Overload 전용 처리 포함) → 실패 시 `event: error` yield
+
+### Guest 5턴 한도 (CAS 패턴)
+
+SQLAlchemy async + Supabase Pooler 환경에서 `SELECT ... FOR UPDATE`는 동시 요청을 직렬화하지 못함을 실측 확인 후, **atomic UPDATE ... RETURNING** 패턴으로 재설계:
+
+```sql
+UPDATE tutoring_sessions
+SET total_turns = total_turns + 1
+WHERE id = :session_id
+  AND total_turns < 5
+RETURNING total_turns;
+```
+
+- `rowcount == 0` → 한도 도달 → 403
+- `rowcount == 1` → DB 레벨 원자적 증가
+- Pooling mode·트랜잭션 경계 무관하게 동작
+
+자세한 맥락: [`docs/work_log/09_sse_and_race_hardening.md`](docs/work_log/09_sse_and_race_hardening.md)
+
+---
+
+## 📦 데이터 모델 (8 테이블)
+
+| 테이블 | 핵심 필드 | 비고 |
+|--------|---------|------|
+| `User` | id, email, role(student/instructor/admin), is_guest | 게스트는 role=student + is_guest=True |
+| `ClassRoom` | name, subject, instructor_id | 시드 전용 (3개 반) |
+| `Enrollment` | user_id, class_id | 시드 전용 |
+| `TutoringSession` | user_id, subject, topic, status, total_turns | active/completed |
+| `Message` | session_id, role, content, turn_number | user/assistant |
+| `ThoughtAnalysis` | message_id(unique), 6차원 점수(0-10), patterns(JSON), socratic_stage(1-5), engagement_level | CheckConstraint로 무결성 보장 |
+| `Report` | session_id(unique), summary, dimension_scores(JSON) | 세션 종료 시 자동 생성 |
+| `TokenUsage` | session_id, input_tokens, output_tokens, model | API 호출별 추적 |
+
+---
+
+## 📁 프로젝트 구조
+
+```
+thinkbridge/
+├── backend/
+│   ├── app/
+│   │   ├── main.py                  # FastAPI 엔트리 + CORS + lifespan
+│   │   ├── config.py                # Pydantic Settings
+│   │   ├── database.py              # async engine (NullPool + Session mode)
+│   │   ├── models/                  # 8 SQLAlchemy 모델
+│   │   ├── schemas/                 # Pydantic 요청/응답 스키마
+│   │   ├── routers/
+│   │   │   ├── auth.py              # register/login/guest
+│   │   │   ├── sessions.py          # CRUD + SSE streaming (CORE)
+│   │   │   ├── reports.py           # session report + growth trend
+│   │   │   ├── dashboard.py         # instructor API
+│   │   │   └── admin.py             # admin stats API
+│   │   ├── services/
+│   │   │   ├── ai_engine.py         # 1-tool+text + streaming + 3-stage fallback
+│   │   │   └── report_generator.py  # narrative generation
+│   │   └── core/
+│   │       ├── security.py          # JWT + bcrypt + getCurrentUser
+│   │       └── prompts.py           # SOCRATIC_SYSTEM_PROMPT + GUEST + tool schema
+│   ├── tests/
+│   │   ├── test_guest_race.py       # asyncio.gather 기반 CAS 방어 검증
+│   │   └── test_api_scenarios.py
+│   ├── seed_data.py                 # 시드 (8 학생, 3 반, 40 세션 + 3 hand-crafted 대화)
+│   ├── seed_sync.py                 # psycopg2 기반 (pgbouncer 우회용)
+│   ├── requirements.txt
+│   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── layout.tsx           # AuthProvider + 한글 폰트
+│   │   │   ├── global-error.tsx     # root-level error boundary (v3)
+│   │   │   ├── error.tsx            # segment-level error
+│   │   │   ├── page.tsx             # 랜딩 (ChatGPT 비교 + demo mode)
+│   │   │   ├── login/ register/
+│   │   │   ├── student/{chat, sessions, report/[id]}/
+│   │   │   ├── instructor/{dashboard, replay/[sessionId]}/
+│   │   │   └── admin/dashboard/
+│   │   ├── components/
+│   │   │   ├── chat/                # ChatInterface, MessageBubble, ThoughtPanel, ProgressBar
+│   │   │   ├── charts/              # Radar/Heatmap/Growth/Timeline (Recharts)
+│   │   │   ├── dashboard/           # ClassSelector, StudentList, SummaryCards
+│   │   │   ├── replay/              # SessionReplay
+│   │   │   └── layout/              # Navbar, Sidebar
+│   │   ├── lib/
+│   │   │   ├── api.ts               # REST + SSE (fetch + ReadableStream, AbortController 지원)
+│   │   │   ├── auth.tsx             # AuthProvider + JWT 관리
+│   │   │   └── constants.ts         # 6차원 라벨 + stage 라벨 + 색상
+│   │   └── types/                   # TypeScript 인터페이스
+│   ├── package.json
+│   └── next.config.mjs
+├── docs/
+│   ├── work_log/                    # 01-10 순차 개발 일지
+│   ├── revise_plan_v1/ v2/ v3/      # 계획 변천 기록
+│   ├── superpowers/{specs, plans}/  # 구조화된 spec + 실행 plan
+│   ├── test/user_test/              # 113개 시나리오 + 자동 테스트 리포트
+│   ├── bug_fix/
+│   └── ui_review/
+├── scripts/
+│   └── warmup.sh                    # 데모 전 cold start 방지
+├── e2e-student-test.js              # Playwright E2E (24 시나리오)
+├── CLAUDE.md                        # 에이전트용 프로젝트 가이드
+├── .gitignore
+├── README.md                        # 이 파일
+└── LIVE_ACCESS.md                   # 🔒 URL/credentials (gitignore — 로컬 전용)
+```
+
+---
+
+## 🧪 로컬 개발 환경 설정
 
 ### Backend
 
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
-# .env 파일에 실제 값 입력
-uvicorn app.main:app --reload
+# .env 편집 (LIVE_ACCESS.md 참조 — 로컬 전용)
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 ### Frontend
@@ -117,11 +241,177 @@ uvicorn app.main:app --reload
 cd frontend
 npm install
 cp .env.example .env.local
-# .env.local 파일에 실제 값 입력
-npm run dev
+# .env.local에 NEXT_PUBLIC_API_URL 설정 (LIVE_ACCESS.md 참조)
+npm run dev  # http://localhost:3000
 ```
 
-## 2026 KIT 바이브코딩 공모전 출품작
+### 시드 데이터 주입
+
+```bash
+# asyncpg + pgbouncer 호환 이슈 회피용 동기 스크립트
+python backend/seed_sync.py
+```
+
+---
+
+## 🔍 테스트 & QA
+
+### 백엔드 — Race 방어 자동 검증
+
+```bash
+# 로컬 (race 재현성 최대)
+THINKBRIDGE_API_URL=http://localhost:8000 python backend/tests/test_guest_race.py
+
+# 프로덕션 smoke test
+python backend/tests/test_guest_race.py
+```
+
+기대 출력:
+```
+200: 5, 403: 1, raw: [200, 200, 200, 200, 200, 403]
+PASS: Guest 5-turn limit correctly enforced under concurrency
+```
+
+### 프론트엔드 — E2E Playwright
+
+```bash
+node e2e-student-test.js  # 24 시나리오 (로그인 → 세션 → 리포트)
+```
+
+### 사용자 수동 검증 가이드
+
+`docs/test/user_test/` 폴더에 **113개 시나리오 체크리스트** 준비:
+
+| 파일 | 용도 |
+|------|------|
+| `comprehensive_test_scenarios.md` | 전체 113개 시나리오 (L.1-20, ST.1-35, IN.1-14, AD.1-9, X.1-35) |
+| `automated_test_report.md` | Playwright 자동 실행 결과 (17개 PASS, 18 스크린샷) |
+| `manual_only_tests.md` | 사용자 수동 필수 96개 (3단계 우선순위) |
+| `screenshots/` | 자동 테스트 시 캡처한 증거 이미지 |
+
+---
+
+## 📖 개발 이력 (Work Log)
+
+프로젝트 진화 타임라인 — 각 파일은 해당 단계의 의사결정·이슈·해결을 담고 있습니다.
+
+| 단계 | 문서 | 내용 |
+|------|------|------|
+| 1 | [`01_overview.md`](docs/work_log/01_overview.md) | 프로젝트 개요 + 초기 스택 선정 |
+| 2 | [`02_implementation.md`](docs/work_log/02_implementation.md) | 기본 구현 (Auth + Sessions + 1-tool Pattern) |
+| 3 | [`03_deployment.md`](docs/work_log/03_deployment.md) | Supabase + Render + Vercel 배포 + 8가지 트러블슈팅 |
+| 4 | [`04_qa_testing.md`](docs/work_log/04_qa_testing.md) | QA + E2E 첫 구축 |
+| 5 | [`05_architecture.md`](docs/work_log/05_architecture.md) | 아키텍처 정리 |
+| 6 | [`06_ai_response_fix.md`](docs/work_log/06_ai_response_fix.md) | Claude tool-only 응답 방어 |
+| 7 | [`07_ui_redesign.md`](docs/work_log/07_ui_redesign.md) | UI/UX 리디자인 |
+| 8 | [`08_prompt_engineering.md`](docs/work_log/08_prompt_engineering.md) | 프롬프트 튜닝 |
+| 9 | [`09_sse_and_race_hardening.md`](docs/work_log/09_sse_and_race_hardening.md) | SSE flush + Guest CAS race 해결 |
+| 10 | [`10_v3_stability_hardening.md`](docs/work_log/10_v3_stability_hardening.md) | **v3 안정화 대규모 작업 (20 commits)** |
+
+### 계획 변천 (revise_plan)
+
+| 버전 | 폴더 | 특징 |
+|------|------|------|
+| v1 | `docs/revise_plan_v1/` | 초기 설계 |
+| v2 | `docs/revise_plan_v2/` | 공모전 대응 재설계 (1-tool+text 확정) |
+| v3 | `docs/revise_plan_v3/` | **안정화 중심** (P0/P1/P2 + DOC + backlog + 실행 순서) |
+
+### 구조화된 Spec + Plan
+
+- [`docs/superpowers/specs/2026-04-12-sse-and-guest-race-hardening-design.md`](docs/superpowers/specs/) — v3 설계 spec
+- [`docs/superpowers/plans/2026-04-12-sse-and-guest-race-hardening.md`](docs/superpowers/plans/) — 실행 계획
+
+---
+
+## 🛡️ v3 안정화 주요 개선 (2026-04-12)
+
+20 commits로 구조/안정성 강화:
+
+### P0 — Critical Fixes (3)
+- `anthropic.OverloadedError` → `InternalServerError` (SDK 0.34.2 실 매핑)
+- `_saveAiResponseToDb` 침묵 실패 → client에 error event yield
+- `apiRequest` empty/non-JSON body 방어 (Render cold start HTML 대응)
+
+### P1 — High Priority (6)
+- Guest 턴 보상 감소 (CAS 증가 후 AI 실패 시)
+- SSE AbortController (unmount 시 fetch cancel)
+- 스트리밍 retry canned text 제거 → error event로 전환
+- `generateSseEvents` exception differentiation
+- `parseSSEBuffer` 로깅 강화
+- 랜딩 게스트/데모 로그인 에러 visibility
+
+### P2 — Structural (5)
+- Message (session, turn, role) 중복 INSERT 방어
+- Report race 제거 (auto-create 폐기, endSession eager generation)
+- `socraticStage` [1,5] clamp
+- `global-error.tsx` root-layout 에러 boundary
+- `useSearchParams` Suspense boundary
+
+### Docs Drift (5)
+- SSE parseSSEBuffer 예시 CRLF 반영
+- SSEEvent type "error" variant 반영
+- CAS supersedes FOR UPDATE (spec annotation)
+- `/api/auth/me` 문서 정정
+- Stuck detection 실제 동작 반영, prompt versioning docstring
+
+### Dead Code 정리 (1)
+- `processTurn` non-streaming 함수 제거
+
+**검증**: Production race test `5x200 + 1x403` PASS / E2E 24/24 PASS / 자동 테스트 17/17 PASS.
+
+---
+
+## ⚠️ 알려진 제약 (Backlog)
+
+공모전 제출 범위 외로 의도적으로 defer된 항목 ([`docs/revise_plan_v3/05_backlog.md`](docs/revise_plan_v3/05_backlog.md)):
+
+| ID | 내용 | 영향도 |
+|----|------|-------|
+| B-1 | snake↔mPascal↔camel 3단계 매핑 통일 | 구조적 (토큰 낭비) |
+| B-2 | Guest user DB cleanup job | 장기 운영 시 bloat |
+| B-3 | JWT refresh token | 세션 수명 UX |
+| B-4 | `lazy="selectin"` 기본값 변경 | 성능 |
+| B-5 | Admin stats SQL 집계 전환 | 대규모 데이터 성능 |
+| B-6 | Hint 버튼 별도 endpoint | Guest 턴 낭비 방지 |
+| B-7 | ChatInterface 상태 머신 리팩터 | 유지보수성 |
+| B-10 | Accessibility 전면 audit | WCAG AA 완전 준수 |
+
+**P1-3 (Fallback flag) 미적용**: Supabase 대시보드 수동 ALTER TABLE 필요하여 별도 cycle로 이관.
+
+---
+
+## 🔐 Live Access / Credentials
+
+라이브 URL, 데모 계정, 배포 대시보드 링크, 환경 변수 예시는 **`LIVE_ACCESS.md`** (루트 디렉토리, `.gitignore` 제외 — 공개 저장소 미등록)에 정리되어 있습니다.
+
+로컬에 해당 파일이 없다면 팀 내부 채널로 받아야 합니다.
+
+---
+
+## 🏆 2026 KIT 바이브코딩 공모전
 
 - **심사 기준**: 기술적 완성도, AI 활용 능력/효율성, 기획력/실무 접합성, 창의성
 - **핵심 원칙**: "학생 채팅 1개 기능의 완벽함 > 기능 10개의 존재"
+- **Iron Rule**: Day 3 끝까지 학생 채팅이 라이브 URL에서 동작 ✅ 달성
+- **제출**: 2026-04-13 (본 README 기준 D-0)
+
+### AI 리포트 첨부 문서
+
+`docs/③ 2026 KIT 바이브코딩 공모전_팀명(개인은 이름)_AI리포트.docx` 참조.
+
+---
+
+## 📚 추가 문서
+
+- **에이전트용 프로젝트 가이드**: [`CLAUDE.md`](CLAUDE.md) — Claude Code 세션에서 자동 로드
+- **백엔드 구현 가이드**: [`backend/CLAUDE.md`](backend/CLAUDE.md)
+- **프론트엔드 구현 가이드**: [`frontend/CLAUDE.md`](frontend/CLAUDE.md)
+- **에이전트 팀 설정**: [`.claude/agents.md`](.claude/agents.md)
+
+---
+
+## 📝 라이선스 & 기여
+
+본 프로젝트는 2026 KIT 바이브코딩 공모전 출품작으로 작성되었으며, 심사 기간 종료 후 별도 라이선스가 정해질 예정입니다.
+
+이슈 제보 / 기여 제안은 공모전 종료 후 GitHub Issues를 통해 받을 예정입니다.
