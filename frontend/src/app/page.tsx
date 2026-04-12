@@ -12,7 +12,8 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth";
+import { useAuth, getHomePathForRole } from "@/lib/auth";
+import { normalizeErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -156,7 +157,7 @@ function useScrollFadeIn()
 
 export default function LandingPage()
 {
-    const { login, loginAsGuest } = useAuth();
+    const { user, login, loginAsGuest } = useAuth();
     const router = useRouter();
     const [mIsGuestLoading, setIsGuestLoading] = useState(false);
     const [mDemoLoadingRole, setDemoLoadingRole] = useState<string | null>(null);
@@ -202,7 +203,8 @@ export default function LandingPage()
         {
             // 이전에는 catch가 비어 있어 실패 시 로딩만 풀리고 사용자는 원인을 알 수 없었음.
             // 운영 중 가장 흔한 실패 원인인 백엔드 cold start / 네트워크 오류를 사용자에게 표면화.
-            const tMessage = tError instanceof Error ? tError.message : GUEST_LOGIN_FALLBACK_ERROR;
+            // normalizeErrorMessage로 "Failed to fetch" 등 브라우저 원문 메시지를 한국어 친화 메시지로 치환.
+            const tMessage = tError instanceof Error ? normalizeErrorMessage(tError) : GUEST_LOGIN_FALLBACK_ERROR;
             setError(tMessage);
             console.error("Guest login failed", tError);
             setIsGuestLoading(false);
@@ -224,11 +226,44 @@ export default function LandingPage()
         }
         catch (tError)
         {
-            const tMessage = tError instanceof Error ? tError.message : DEMO_LOGIN_FALLBACK_ERROR;
+            const tMessage = tError instanceof Error ? normalizeErrorMessage(tError) : DEMO_LOGIN_FALLBACK_ERROR;
             setError(tMessage);
             console.error("Demo login failed", tError, { role });
             setDemoLoadingRole(null);
         }
+    }
+
+    /**
+     * 로그인 상태에서 기본 CTA 클릭 시 역할별 홈으로 이동.
+     */
+    function handleContinue()
+    {
+        if (!user)
+        {
+            return;
+        }
+        router.push(getHomePathForRole(user.role));
+    }
+
+    /**
+     * 로그인된 사용자를 위한 Hero CTA 라벨 — 역할과 게스트 여부에 따라 분기.
+     */
+    function getContinueCtaLabel(): string
+    {
+        if (!user)
+        {
+            return "";
+        }
+        if (user.role === "instructor")
+        {
+            return "강사 대시보드로";
+        }
+        if (user.role === "admin")
+        {
+            return "관리자 대시보드로";
+        }
+        // student or guest
+        return user.isGuest ? "체험 계속하기" : "대화 계속하기";
     }
 
     return (
@@ -332,7 +367,7 @@ export default function LandingPage()
                         소크라테스식 질문으로 학생 스스로 답에 도달하도록 이끕니다.
                     </p>
 
-                    {/* CTA buttons */}
+                    {/* CTA buttons — 로그인 상태별 분기 */}
                     <div
                         className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center"
                         style={{
@@ -341,35 +376,66 @@ export default function LandingPage()
                             transition: `opacity 0.7s ease-out ${HERO_STAGGER_DELAY_MS * 4}ms, transform 0.7s ease-out ${HERO_STAGGER_DELAY_MS * 4}ms`,
                         }}
                     >
-                        <Button
-                            size="lg"
-                            className="w-full bg-indigo-600 px-8 text-base font-semibold shadow-lg shadow-indigo-200 transition-all duration-300 hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-200 sm:w-auto"
-                            onClick={handleGuestTrial}
-                            disabled={mIsGuestLoading}
-                        >
-                            {mIsGuestLoading ? "준비 중..." : "바로 체험하기"}
-                            <ArrowRight className="ml-2 h-4 w-4" />
-                        </Button>
-                        <Button
-                            size="lg"
-                            variant="outline"
-                            className="w-full border-gray-300 transition-all duration-300 hover:border-indigo-300 hover:bg-indigo-50 sm:w-auto"
-                            onClick={() => router.push("/login")}
-                        >
-                            로그인
-                        </Button>
+                        {user ? (
+                            <Button
+                                size="lg"
+                                className="w-full bg-indigo-600 px-8 text-base font-semibold shadow-lg shadow-indigo-200 transition-all duration-300 hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-200 sm:w-auto"
+                                onClick={handleContinue}
+                            >
+                                {getContinueCtaLabel()}
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                        ) : (
+                            <>
+                                <Button
+                                    size="lg"
+                                    className="w-full bg-indigo-600 px-8 text-base font-semibold shadow-lg shadow-indigo-200 transition-all duration-300 hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-200 sm:w-auto"
+                                    onClick={handleGuestTrial}
+                                    disabled={mIsGuestLoading}
+                                >
+                                    {mIsGuestLoading ? "준비 중..." : "바로 체험하기"}
+                                    <ArrowRight className="ml-2 h-4 w-4" />
+                                </Button>
+                                <Button
+                                    size="lg"
+                                    variant="outline"
+                                    className="w-full border-gray-300 transition-all duration-300 hover:border-indigo-300 hover:bg-indigo-50 sm:w-auto"
+                                    onClick={() => router.push("/login")}
+                                >
+                                    로그인
+                                </Button>
+                            </>
+                        )}
                     </div>
 
-                    {/* Guest trial note */}
-                    <p
-                        className="mt-3 text-center text-sm text-gray-400"
-                        style={{
-                            opacity: mHeroLoaded ? 1 : 0,
-                            transition: `opacity 0.7s ease-out ${HERO_STAGGER_DELAY_MS * 5}ms`,
-                        }}
-                    >
-                        회원가입 없이 5턴 무료 체험
-                    </p>
+                    {/* Hero CTA 바로 아래 inline 에러 배너 — 상단 고정 배너 외에 Hero 근처에서도 즉시 눈에 띄도록 추가 표시 */}
+                    {mError && (
+                        <div className="mx-auto mt-4 flex max-w-md items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                            <span className="flex-1">{mError}</span>
+                            <button
+                                type="button"
+                                onClick={() => setError(null)}
+                                className="text-xs font-medium text-red-500 underline hover:text-red-700"
+                                aria-label="에러 닫기"
+                            >
+                                닫기
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Guest trial note — 비로그인 상태에서만 노출 */}
+                    {!user && (
+                        <p
+                            className="mt-3 text-center text-sm text-gray-400"
+                            style={{
+                                opacity: mHeroLoaded ? 1 : 0,
+                                transition: `opacity 0.7s ease-out ${HERO_STAGGER_DELAY_MS * 5}ms`,
+                            }}
+                        >
+                            회원가입 없이 5턴 무료 체험
+                        </p>
+                    )}
 
                     {/* Mini Chat Preview Mockup */}
                     <div
@@ -635,7 +701,7 @@ export default function LandingPage()
                             <Lightbulb className="h-4 w-4 text-amber-600" />
                         </div>
                         <h2 className="text-2xl font-bold text-gray-900 md:text-3xl lg:text-4xl">
-                            데모 모드
+                            {user ? "다른 역할 체험" : "데모 모드"}
                         </h2>
                     </div>
                     <p className="mb-10 text-gray-500">

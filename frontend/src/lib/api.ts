@@ -32,6 +32,26 @@ const ERROR_NON_JSON = "서버 응답이 JSON 형식이 아닙니다.";
 /** HTML/텍스트 에러 응답을 에러 메시지에 포함시킬 때 최대 표시 길이 */
 const ERROR_BODY_PREVIEW_MAX_LENGTH = 100;
 
+/**
+ * 브라우저별 fetch 실패 원문 메시지 → 한국어 친화 메시지 매핑.
+ * Chrome/Firefox/Safari 각각 다른 문자열을 throw하므로 모두 커버.
+ */
+const ERROR_MESSAGE_MAP: Record<string, string> = {
+    "Failed to fetch": "네트워크 연결을 확인해 주세요.",
+    "Load failed": "네트워크 연결을 확인해 주세요.",
+    "NetworkError when attempting to fetch resource.": "네트워크 연결을 확인해 주세요.",
+};
+
+/**
+ * fetch 관련 원문 에러 메시지를 한국어 친화 메시지로 치환.
+ * 매핑되지 않은 메시지는 원본 유지.
+ */
+export function normalizeErrorMessage(error: unknown): string
+{
+    const tRaw = error instanceof Error ? error.message : String(error);
+    return ERROR_MESSAGE_MAP[tRaw] ?? tRaw;
+}
+
 
 // --- SSE Parsing Constants ---
 

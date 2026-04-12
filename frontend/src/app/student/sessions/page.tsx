@@ -17,6 +17,7 @@ import {
     MessageCircle,
     ChevronRight,
     Plus,
+    FileText,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,6 +58,7 @@ const DEFAULT_STATUS_CONFIG = {
 const EMPTY_STATE_MESSAGE = "아직 세션이 없습니다. 새 대화를 시작해보세요!";
 const PAGE_TITLE = "세션 목록";
 const NEW_CHAT_LABEL = "새 대화 시작";
+const REPORT_CTA_LABEL = "리포트";
 const LOADING_SKELETON_COUNT = 4;
 
 
@@ -147,6 +149,14 @@ function SessionCard({ session, onClick }: SessionCardProps)
                         <StatusIcon className="mr-1 h-3 w-3" />
                         {tStatus.label}
                     </Badge>
+
+                    {/* 완료된 세션은 리포트 CTA를 명시적으로 노출 — 클릭 시 카드 onClick으로 버블링되어 동일 리포트 페이지로 이동 */}
+                    {session.status === "completed" && (
+                        <Button size="sm" variant="outline" className="shrink-0">
+                            <FileText className="mr-1 h-3 w-3" />
+                            {REPORT_CTA_LABEL}
+                        </Button>
+                    )}
 
                     {/* Arrow */}
                     <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" />

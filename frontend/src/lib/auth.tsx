@@ -27,14 +27,22 @@ const PUBLIC_PATHS = ["/", "/login", "/register"];
 /** Redirect target for unauthenticated users */
 const LOGIN_PATH = "/login";
 
+/**
+ * 역할별 홈 경로 상수 — landing/navbar 등 외부에서도 재사용 가능하도록 export.
+ * 기존 내부 상수(STUDENT_HOME_PATH 등)는 호환성 유지를 위해 동일 값으로 별도 선언 유지.
+ */
+export const HOME_PATH_STUDENT = "/student/chat";
+export const HOME_PATH_INSTRUCTOR = "/instructor/dashboard";
+export const HOME_PATH_ADMIN = "/admin/dashboard";
+
 /** Redirect target after successful login (student default) */
-const STUDENT_HOME_PATH = "/student/chat";
+const STUDENT_HOME_PATH = HOME_PATH_STUDENT;
 
 /** Redirect target for instructor after login */
-const INSTRUCTOR_HOME_PATH = "/instructor/dashboard";
+const INSTRUCTOR_HOME_PATH = HOME_PATH_INSTRUCTOR;
 
 /** Redirect target for admin after login */
-const ADMIN_HOME_PATH = "/admin/dashboard";
+const ADMIN_HOME_PATH = HOME_PATH_ADMIN;
 
 
 // --- Auth Context Type ---
@@ -57,8 +65,9 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 /**
  * Determines the appropriate home page based on user role.
+ * Exported so landing page / Navbar can route authenticated users consistently.
  */
-function getHomePathForRole(role: string): string
+export function getHomePathForRole(role: string): string
 {
     if (role === "instructor")
     {
