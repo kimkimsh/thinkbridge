@@ -60,6 +60,19 @@ const CHARS_PER_FRAME = 2;
 /** Animation frame interval in milliseconds (~30ms for natural typing speed) */
 const ANIMATION_INTERVAL_MS = 30;
 
+/**
+ * z-index tier for the full-screen session-end overlay.
+ * Must render above Sidebar Sheet (z-50) and ThoughtPanel floating button (z-40)
+ * so the user cannot interact with sidebar/panel while report generation is in-flight.
+ */
+const END_SESSION_OVERLAY_Z_INDEX = "z-[70]";
+
+/** Primary overlay message shown while report generation is running server-side */
+const END_SESSION_OVERLAY_PRIMARY_TEXT = "사고 과정을 분석하고 있어요";
+
+/** Secondary hint — gives users a realistic upper-bound expectation for wait time */
+const END_SESSION_OVERLAY_SECONDARY_TEXT = "리포트 생성까지 최대 10초가 걸릴 수 있습니다";
+
 /** Welcome tips for Socratic tutoring */
 const WELCOME_TIPS = [
     { icon: MessageCircle, text: "질문을 통해 스스로 답을 찾아가는 과정을 경험하세요" },
@@ -708,16 +721,27 @@ export function ChatInterface({
                                         <Send className="h-4 w-4" />
                                     </Button>
 
-                                    {/* End session button */}
+                                    {/* End session button — outline variant with explicit active/hover/disabled states
+                                        so 3-state discernibility is unambiguous (기존 ghost variant는 경계선이 약해
+                                        활성/비활성 구분이 어려웠던 UX 이슈 대응). */}
                                     <Button
-                                        variant="ghost"
+                                        variant="outline"
                                         size="sm"
                                         onClick={handleEndSession}
                                         disabled={mIsStreaming || mIsEnding || mIsSessionEnded || mMessages.length === 0}
-                                        className="gap-1 whitespace-nowrap text-red-500 hover:bg-red-50 hover:text-red-600"
+                                        className={`
+                                            gap-1 whitespace-nowrap
+                                            border-red-300 bg-white text-red-600
+                                            hover:border-red-500 hover:bg-red-50 hover:text-red-700
+                                            active:bg-red-100
+                                            disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-300
+                                            transition-colors duration-150
+                                        `}
+                                        aria-label="대화 종료"
+                                        title="대화 종료"
                                     >
                                         <Square className="h-3.5 w-3.5" />
-                                        <span className="hidden sm:inline text-xs">종료</span>
+                                        <span className="hidden sm:inline text-xs font-medium">종료</span>
                                     </Button>
                                 </div>
                             </div>
@@ -733,6 +757,27 @@ export function ChatInterface({
                     />
                 </div>
             </div>
+
+            {/* 세션 종료 진행 중 전체화면 오버레이.
+                "종료" 클릭 직후 router.push 로 리포트 페이지가 그려지기까지 수 초 ~ 10+초 공백이 생기는데,
+                기존에는 버튼만 disabled 되어 사용자가 "먹통인가?" 로 인식하던 UX 이슈 대응.
+                Sidebar Sheet(z-50) + ThoughtPanel floating(z-40) 보다 상위인 z-[70]로 올려
+                종료 중에는 사이드바/분석 패널 조작도 차단. */}
+            {mIsEnding && (
+                <div
+                    className={`fixed inset-0 ${END_SESSION_OVERLAY_Z_INDEX} flex flex-col items-center justify-center bg-white/85 backdrop-blur-sm animate-in fade-in duration-200`}
+                    role="status"
+                    aria-live="polite"
+                >
+                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+                    <p className="mt-4 text-sm font-semibold text-gray-800">
+                        {END_SESSION_OVERLAY_PRIMARY_TEXT}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500">
+                        {END_SESSION_OVERLAY_SECONDARY_TEXT}
+                    </p>
+                </div>
+            )}
 
             {/* Analysis panel (mobile floating button + Sheet drawer, visible only on small screens when analysis exists) */}
             {mCurrentAnalysis && (
