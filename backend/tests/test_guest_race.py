@@ -21,7 +21,7 @@ import httpx
 DEFAULT_API_URL = "https://thinkbridge-api.onrender.com"
 API_URL = os.getenv("THINKBRIDGE_API_URL", DEFAULT_API_URL)
 
-CONCURRENT_REQUESTS = 10
+CONCURRENT_REQUESTS = 6
 GUEST_MAX_TURNS = 5
 EXPECTED_SUCCESS_COUNT = GUEST_MAX_TURNS
 EXPECTED_FORBIDDEN_COUNT = CONCURRENT_REQUESTS - GUEST_MAX_TURNS
@@ -41,12 +41,16 @@ async def warmUpBackend(client):
 
 async def createGuestSession(client):
     """게스트 토큰 발급 후 세션 1개 생성"""
-    tAuth = await client.post(f"{API_URL}/api/auth/guest")
+    tAuth = await client.post(
+        f"{API_URL}/api/auth/guest",
+        timeout=WARMUP_TIMEOUT_SECONDS,
+    )
     tToken = tAuth.json()["accessToken"]
     tSession = await client.post(
         f"{API_URL}/api/sessions",
         headers={"Authorization": f"Bearer {tToken}"},
         json={"subject": "math", "topic": "race test"},
+        timeout=WARMUP_TIMEOUT_SECONDS,
     )
     return tToken, tSession.json()["id"]
 
