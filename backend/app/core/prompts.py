@@ -1,9 +1,19 @@
 """
+ThinkBridge AI System Prompts + Tool Use Schema.
+
 소크라테스식 튜터링 프롬프트 및 도구 정의
 Socratic tutoring system prompts and Claude Tool Use definitions.
 
 This module defines the core prompt templates and tool schema
 for the 1-tool + text AI tutoring pattern.
+
+### Evolution History
+- v1 (2026-04-07): Initial 3-principle prompt (no-answer, guide-only, stage-based)
+- v2 (2026-04-08): Added analyze_thinking Tool Use for 6-dimension analysis + few-shot examples
+- v3 (2026-04-09): Added principle 4 (min 2 sentences) to prevent tool-only fallback (commit 572f8ee)
+- v3.1 (2026-04-10): Added STUCK_DETECTION_INSTRUCTION prefix for hint flow
+
+See `docs/work_log/06_ai_response_fix.md` and `docs/work_log/08_prompt_engineering.md`.
 """
 
 

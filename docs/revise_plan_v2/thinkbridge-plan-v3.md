@@ -508,4 +508,4 @@ This is the most important backend task.
 | Dashboard empty | 50% | 15% | **5%** | 8 students x 5 sessions rich seed data |
 | Judge can't try | 70% | 10% | **3%** | Guest 5 turns + one-click demo + warm-up |
 | Demo too slow | 40% | 20% | **5%** | Tab pre-login + warm-up script |
-| Scope overrun | 20% | 40% | **15%** | Admin=P2, non-streaming fallback, iron rule |
+| Scope overrun | 20% | 40% | **15%** | Admin=P1 (matches actual implementation), non-streaming fallback, iron rule |
