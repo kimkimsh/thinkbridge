@@ -12,7 +12,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Brain, ArrowRight, Sparkles, MessageCircle, BarChart3, GraduationCap } from "lucide-react";
+import { Brain, ArrowRight, ArrowLeft, Sparkles, MessageCircle, BarChart3, GraduationCap } from "lucide-react";
 
 
 // --- Constants ---
@@ -21,6 +21,10 @@ const ERROR_EMPTY_FIELDS = "이메일과 비밀번호를 입력해주세요.";
 
 /** 게스트 체험 로그인 실패 시 기본 표시 메시지 */
 const GUEST_LOGIN_FALLBACK_ERROR = "게스트 체험 시작에 실패했습니다. 잠시 후 다시 시도해주세요.";
+
+/** 처음 안내 화면(랜딩)으로 돌아가는 내비게이션 라벨과 경로 */
+const BACK_TO_HOME_LABEL = "처음 화면으로";
+const HOME_PATH = "/";
 
 /** Feature highlights for the brand panel */
 const BRAND_FEATURES = [
@@ -154,11 +158,21 @@ export default function LoginPage()
             </div>
 
             {/* Right login form */}
-            <div className="flex flex-1 items-center justify-center bg-gray-50 px-4">
+            <div className="relative flex flex-1 items-center justify-center bg-gray-50 px-4">
+                {/* Back to landing link (top-left, visible on all breakpoints) */}
+                <Link
+                    href={HOME_PATH}
+                    className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 lg:left-6 lg:top-6"
+                    aria-label={BACK_TO_HOME_LABEL}
+                >
+                    <ArrowLeft className="h-4 w-4" />
+                    {BACK_TO_HOME_LABEL}
+                </Link>
+
                 <div className="w-full max-w-md">
                     {/* Mobile logo (hidden on desktop) */}
                     <div className="mb-8 text-center lg:hidden">
-                        <Link href="/" className="inline-flex items-center gap-2">
+                        <Link href={HOME_PATH} className="inline-flex items-center gap-2">
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600">
                                 <Brain className="h-6 w-6 text-white" />
                             </div>

@@ -1,9 +1,10 @@
 # 수정 사항 검증 테스트 시나리오 — v3.1 UX Fix Batch
 
-> **Date**: 2026-04-12 (v3.1 UX 수정 배치 — 사용자 테스트 피드백 대응)
-> **Commits**: `d8ff223`, `7a95eaf`, `790ac33`, `36dd331`, `c995d25`, `ee8849d` (6 commits, 12 issues)
+> **Date**: 2026-04-12 (v3.1 UX 수정 배치 — 사용자 테스트 피드백 대응 + D.1 튜토리얼 추가)
+> **Commits (UX Fix 12건)**: `d8ff223`, `7a95eaf`, `790ac33`, `36dd331`, `c995d25`, `ee8849d` (6 commits, 12 issues)
+> **Commits (Tutorial D.1)**: `e16fec7` (Phase 2 core), `514d190` (work log), `5badfb7` (Phase 3 integration)
 > **Target URL**: 로컬 전용 (`docs/LIVE_ACCESS.md` 참조) — 라이브 URL은 개인 튜터링 컨텐츠 보호를 위해 비공개
-> **총 시나리오 수**: **15개** (§1 에러/진행률 4 · §2 네비/복원 6 · §3 UI 폴리시 2 · §4 통합 3)
+> **총 시나리오 수**: **25개** (§1 에러/진행률 4 · §2 네비/복원 6 · §3 UI 폴리시 2 · §4 튜토리얼 10 · §5 통합 3)
 
 ---
 
@@ -50,8 +51,19 @@
 | B.5 | 강사 리플레이 헤더 학생명/과목/주제/세션 ID | `7a95eaf` | V.10 | Easy (대시보드 → 학생 클릭) |
 | C.1 | 종료 버튼 4-state (base/hover/active/disabled) | `36dd331` | V.11 | Medium (여러 상태 전환) |
 | C.2 | 모바일 햄버거 `/student/chat`에서만 좌하단 | `ee8849d` | V.12 | Easy (Device Toolbar 390px) |
+| **D.1** | **채팅 튜토리얼 오버레이 (7 steps, auto + ? re-launch)** | `e16fec7` / `5badfb7` | V.16 | Medium (동적 타겟 + localStorage) |
+| **D.1** | 세션 목록 튜토리얼 (3 steps, 첫 카드 하이라이트) | `e16fec7` / `5badfb7` | V.17 | Easy |
+| **D.1** | 강사 대시보드 튜토리얼 (4 steps) | `e16fec7` / `5badfb7` | V.18 | Easy |
+| **D.1** | 관리자 대시보드 튜토리얼 (4 steps) | `e16fec7` / `5badfb7` | V.19 | Easy |
+| **D.1** | TutorialButton (?) 재실행 — 4 페이지 공통 | `e16fec7` / `5badfb7` | V.20 | Easy |
+| **D.1** | localStorage 완료 플래그 영속성 | `e16fec7` | V.21 | Medium (Application 탭 필요) |
+| **D.1** | 키보드 네비게이션 (Esc / Enter / Arrow) | `e16fec7` | V.22 | Easy |
+| **D.1** | 모바일 뷰포트 center fallback (< 768px) | `e16fec7` | V.23 | Easy (Device Toolbar) |
+| **D.1** | 동적 타겟 `waitForTarget` 5s timeout → center fallback | `e16fec7` | V.24 | Medium (chat pre-session 진입) |
+| **D.1** | z-[80] 상위 레이어링 + 글로벌 disable 키 | `e16fec7` | V.25 | Medium (다른 오버레이와 충돌 검증) |
 
-> **주**: 이슈 A.1 / L.9 는 동일 증상에 대한 이중 배너 수정이므로 V.1 한 시나리오로 커버한다.
+> **주 1**: 이슈 A.1 / L.9 는 동일 증상에 대한 이중 배너 수정이므로 V.1 한 시나리오로 커버한다.
+> **주 2**: D.1 튜토리얼은 10개 세부 시나리오(V.16-V.25)로 쪼개 검증한다. 4개 페이지 × (auto-trigger + 콘텐츠 + re-launch + 영속성 + 키보드 + 모바일 + 동적 + 레이어링) 축으로 조합되어 개별 축 문제의 원인 격리를 쉽게 한다.
 
 ---
 
@@ -62,8 +74,9 @@
 | [§1. 에러 처리 + 진행률 검증 (A.x)](#1-에러-처리--진행률-검증-ax) | V.1 – V.4 | 4 |
 | [§2. 네비게이션 + 상태 복원 (B.x)](#2-네비게이션--상태-복원-bx) | V.5 – V.10 | 6 |
 | [§3. UI 폴리시 (C.x)](#3-ui-폴리시-cx) | V.11 – V.12 | 2 |
-| [§4. 통합 시나리오](#4-통합-시나리오) | V.13 – V.15 | 3 |
-| [§5. 최종 체크리스트](#5-최종-체크리스트) | — | — |
+| [§4. 튜토리얼 오버레이 (D.1)](#4-튜토리얼-오버레이-d1) | V.16 – V.25 | 10 |
+| [§5. 통합 시나리오](#5-통합-시나리오) | V.13 – V.15 | 3 |
+| [§6. 최종 체크리스트](#6-최종-체크리스트) | — | — |
 
 ---
 
@@ -471,7 +484,392 @@
 
 ---
 
-## §4. 통합 시나리오
+## §4. 튜토리얼 오버레이 (D.1)
+
+> 구현 구조 요약 (참고):
+> - **Provider**: `frontend/src/lib/tutorial.tsx` — `TutorialProvider` + `useTutorial()` + `useAutoStartTutorial(id, ready)` + `waitForTarget(selector, timeoutMs)`
+> - **Overlay**: `frontend/src/components/tutorial/TutorialOverlay.tsx` — `createPortal(..., document.body)` + SVG mask spotlight + 4 placements (top/bottom/left/right) + center fallback
+> - **Button**: `frontend/src/components/tutorial/TutorialButton.tsx` — `?` (HelpCircle) 아이콘, props `tutorialId`
+> - **Constants**: `frontend/src/lib/tutorialConstants.ts` — `TUTORIAL_OVERLAY_Z_INDEX = 80`, `TUTORIAL_WAIT_DEFAULT_TIMEOUT_MS = 5000`, `TUTORIAL_MOBILE_BREAKPOINT_PX = 768`, `TUTORIAL_BACKDROP_OPACITY = 0.55`, storage prefix `thinkbridge_tutorial_`, version suffix `_v1`, disable key `thinkbridge_tutorial_disabled`
+> - **Steps**: `frontend/src/lib/tutorialSteps.ts` — 4 튜토리얼 × 18 steps
+>   - chat: 7 steps (`chat-intro`, `chat-topic`, `chat-start`, `chat-progress`, `chat-analysis`, `chat-hint`, `chat-end`)
+>   - sessions: 3 steps (`sessions-new`, `sessions-card`, `sessions-report`)
+>   - instructor: 4 steps (`instructor-class`, `instructor-summary`, `instructor-heatmap`, `instructor-students`)
+>   - admin: 4 steps (`admin-banner`, `admin-stats`, `admin-bar`, `admin-radar`)
+> - **Auto-start 게이팅 조건** (각 페이지마다 다름):
+>   - chat: `!mIsLoadingSession`
+>   - sessions: `!mIsLoading && mSessions.length > 0` (세션 0개면 auto-trigger 안 함)
+>   - instructor: `!mIsLoadingData && !!mHeatmap`
+>   - admin: `!mIsLoading && !!mStats`
+
+### V.16 — D.1 chat: 채팅 튜토리얼 auto-trigger + 7 steps + 동적 타겟
+
+**목적**: 게스트 또는 신규 학생이 `/student/chat` 최초 진입 시 7단계 튜토리얼이 auto-trigger되고, 세션 시작 전/후 타겟이 모두 올바르게 스포트라이트 처리되는지 확인
+**선행 조건**:
+- 시크릿 창 (localStorage 비어있어야 함)
+- DevTools Application 탭 → LocalStorage 에서 `thinkbridge_tutorial_chat_v1` 키 **존재하지 않음** 사전 확인
+- 게스트 또는 학생 계정으로 `/student/chat` 진입
+
+**이전 버그**: 기능 부재 — 신규 사용자는 화면 요소의 역할 안내를 받지 못해 "어디를 눌러야 하지?" 혼란
+
+**기대 결과**: `mIsLoadingSession === false` 조건 충족 직후 튜토리얼 1단계 오버레이 자동 등장 → 7단계 순차 진행 → 마지막 "완료" 클릭 시 localStorage에 완료 플래그 기록
+
+- [ ] 단계 1: 시크릿 창 + 게스트/학생 로그인 → `/student/chat` 진입
+  - 기대: 페이지 로드 완료 직후 (500ms-1s) 전체 화면 반투명 백드롭(`rgba(0,0,0,0.55)`) + 첫 스텝 타겟 `[data-tutorial-id='chat-subject-selector']` 에 SVG mask 스포트라이트 (주변만 어둡고 해당 영역만 선명)
+- [ ] 단계 2: 툴팁 카드 내용 확인 (step 1/7)
+  - 기대: 제목 "과목을 선택하세요" + 설명 "수학·과학·논술 중 오늘 대화할 주제 영역을 고릅니다..." + X 닫기 아이콘 + 스텝 카운터 "1/7" + "건너뛰기" + "다음" 버튼 (이전 버튼은 첫 스텝이므로 숨김/비활성)
+- [ ] 단계 3: "다음" 클릭 → step 2 전환
+  - 기대: 스포트라이트가 `[data-tutorial-id='chat-topic-input']` 로 이동 (input 영역) + 제목 "주제를 입력하세요" + 카운터 "2/7"
+- [ ] 단계 4: "다음" 클릭 → step 3 전환
+  - 기대: `[data-tutorial-id='chat-start-button']` ("대화 시작하기" 버튼) 하이라이트 + 제목 "대화 시작" + placement `top` (버튼 위쪽 툴팁)
+- [ ] 단계 5: **이 시점에 "다음" 클릭 — 세션 아직 시작 전**이므로 step 4 타겟 `[data-tutorial-id='chat-progress-bar']`는 DOM에 없음
+  - 기대 A (정상): `waitForTarget` 5초 polling — 이 시점에 사용자가 튜토리얼을 일시 중지한 상태로 "대화 시작하기" 클릭 → ChatInterface 마운트되면서 progress bar 생성 → 튜토리얼이 타겟을 찾아 step 4 하이라이트
+  - 기대 B (5초 초과 시): `waitForTarget` 타임아웃 → placement = `center` fallback (툴팁 중앙 배치, 스포트라이트 없음) → 사용자는 "다음"으로 넘어가거나 "건너뛰기"
+  - **참고**: 본 시나리오는 기대 A 플로우로 진행. 기대 B 는 V.24에서 별도 검증.
+- [ ] 단계 6: 튜토리얼 일시 진행 중에 "대화 시작하기" 실제 클릭 → 세션 생성 → ChatInterface 렌더
+  - 기대: progress bar + hint 버튼 + end 버튼 + thought panel 모두 DOM에 마운트 → 튜토리얼이 이를 감지하여 step 4 `[data-tutorial-id='chat-progress-bar']` 하이라이트 전환 (자연스러운 transition)
+- [ ] 단계 7: "다음" × 4회 → step 5 (thought panel), step 6 (hint), step 7 (end) 순차 진행
+  - 기대: 각 step 의 올바른 target + title + placement
+  - 비고: step 5 placement = `left` (ThoughtPanel 우측에 있으므로), step 6/7 = `top`
+- [ ] 단계 8: 마지막 스텝 (7/7) 에서 "다음" 버튼 라벨 확인
+  - 기대: `TUTORIAL_BTN_FINISH = "완료"` 로 전환됨 (더 이상 다음 스텝 없으므로)
+- [ ] 단계 9: "완료" 클릭
+  - 기대: 오버레이 사라짐 + 포커스 복원 (`TUTORIAL_FOCUS_RESTORE_MS = 50ms`) + localStorage 에 `thinkbridge_tutorial_chat_v1 = "true"` 저장
+- [ ] 단계 10: 페이지 새로고침 (F5)
+  - 기대: localStorage 플래그 때문에 튜토리얼 **auto-trigger 안 됨** (정상 채팅 UI만 표시)
+- [ ] 단계 11: DevTools Application → LocalStorage 직접 확인
+  - 기대: `thinkbridge_tutorial_chat_v1` 키에 `"true"` 값
+
+**합격 기준**: 9/11 이상
+**비고**:
+- Step 1-3 (pre-session) 은 `ChatPage` 상단 주제 선택 영역, step 4-7 (post-session) 은 `ChatInterface` 내부로 DOM 위치가 다름. 스포트라이트 좌표는 viewport 기준 실시간 계산되므로 scrollIntoView + `TUTORIAL_SCROLL_STABILIZE_MS = 150ms` 딜레이 뒤 측정.
+- 7 steps 중간에 페이지 이탈 (예: Sidebar 클릭) 시 튜토리얼은 건너뛴 것으로 간주되지 않음 — completion 플래그 미저장 상태로 남음 → 재진입 시 재시작 가능.
+
+---
+
+### V.17 — D.1 sessions: 세션 목록 튜토리얼 (3 steps, 첫 카드만 하이라이트)
+
+**목적**: `/student/sessions` 첫 방문 시 3단계 튜토리얼이 auto-trigger되고, 첫 번째 / 첫 번째 완료 카드에만 `data-tutorial-id` 가 조건부로 부여되는지 확인
+**선행 조건**:
+- `student@demo.com` 로그인 (세션 여러 개 보유)
+- localStorage `thinkbridge_tutorial_sessions_v1` 키 **없음** (Application 탭 삭제)
+- 적어도 active 1 + completed 1 카드 존재
+
+**이전 버그**: 없음 (D.1 신규 기능)
+
+**기대 결과**:
+- `useAutoStartTutorial("sessions", !mIsLoading && mSessions.length > 0)` 게이팅 → 로딩 완료 + 세션 ≥ 1 일 때 auto-trigger
+- step 2 타겟 `sessions-card-first` 는 **첫 번째 카드** 에만 attribute 존재 (`isFirst ? "..." : undefined`)
+- step 3 타겟 `sessions-report-cta` 는 **첫 번째 completed 카드의 리포트 버튼** 에만 존재 (`isFirstCompleted ? "..." : undefined`)
+
+- [ ] 단계 1: `/student/sessions` 진입
+  - 기대: 세션 목록 로드 → 약 500ms 이내 튜토리얼 오버레이 등장 (step 1/3)
+- [ ] 단계 2: step 1 타겟 확인
+  - 기대: 상단 "새 대화 시작하기" 버튼 (`[data-tutorial-id='sessions-new-chat']`) 스포트라이트 + 제목 "새 대화 시작" + placement `bottom`
+- [ ] 단계 3: "다음" → step 2 전환
+  - 기대: **첫 번째** 세션 카드만 스포트라이트 — DevTools Elements에서 확인: 첫 카드에 `data-tutorial-id="sessions-card-first"` 존재, 나머지 카드에는 없음
+- [ ] 단계 4: "다음" → step 3 전환
+  - 기대 A: **첫 번째 completed 카드**의 "리포트" 버튼 (FileText 아이콘) 스포트라이트 + 제목 "리포트 보기" + placement `left`
+  - 기대 B (edge): completed 세션 0개인 경우 → `waitForTarget` 5초 타임아웃 → center fallback (본 시나리오는 completed ≥ 1 전제)
+- [ ] 단계 5: "완료" 클릭 → 오버레이 종료
+  - 기대: localStorage 에 `thinkbridge_tutorial_sessions_v1 = "true"` 저장 + 포커스 복원
+- [ ] 단계 6: 페이지 새로고침
+  - 기대: 튜토리얼 auto-trigger **안 됨**
+- [ ] 단계 7: 첫 카드가 active이고 두 번째 카드부터 completed인 경우 DevTools Elements 검증
+  - 기대: 첫 카드에 `sessions-card-first` 존재, 두 번째 카드(첫 completed)에 `sessions-report-cta` 존재 — 두 attribute가 서로 다른 카드에 있어도 정상 (step 3 이 별개 카드 타겟)
+- [ ] 단계 8 (edge): localStorage 클리어 + 세션 **0개** 상태 (신규 학생 가정) 로 진입
+  - 기대: `mSessions.length > 0` 조건 실패 → auto-trigger 안 됨 → 세션 생성 후 재방문 시에만 trigger
+
+**합격 기준**: 6/8 이상
+**비고**:
+- 첫 카드가 "첫 번째 completed" 가 아닐 수도 있음 (가장 최근 세션이 active 일 때). 실제 attribute 할당 로직은 `isFirst = index === 0`, `isFirstCompleted = session === firstCompletedSession` 로 분리되어 있음.
+- 세션 0개 edge는 정상 동작 — 튜토리얼은 "보여줄 카드 없음" 상태에서 스킵되고, 첫 세션 생성 후 다시 `/student/sessions` 방문 시 뜬다.
+
+---
+
+### V.18 — D.1 instructor: 강사 대시보드 튜토리얼 (4 steps)
+
+**목적**: `/instructor/dashboard` 첫 방문 시 4단계 튜토리얼이 heatmap 로드 후 auto-trigger
+**선행 조건**:
+- `instructor@demo.com` 로그인
+- localStorage `thinkbridge_tutorial_instructor_v1` 키 **없음**
+- 해당 강사의 반에 학생 데이터 존재 (히트맵 렌더 가능해야 함)
+
+**기대 결과**:
+- 게이팅: `!mIsLoadingData && !!mHeatmap` → 히트맵 데이터 로드 완료 후 trigger
+- 4 steps: 반 선택 → 요약 카드 → 히트맵 → 학생 목록
+
+- [ ] 단계 1: `/instructor/dashboard` 진입
+  - 기대: 반 선택기 + 통계 카드 + 히트맵 + 학생 목록 렌더 → 히트맵 완료 직후 튜토리얼 step 1/4 오버레이 등장
+- [ ] 단계 2: step 1 타겟 확인
+  - 기대: `[data-tutorial-id='instructor-class-selector']` 스포트라이트 + 제목 "반 선택" + placement `bottom`
+- [ ] 단계 3: "다음" → step 2
+  - 기대: `[data-tutorial-id='instructor-summary-cards']` (4 카드 컨테이너 전체) 스포트라이트 + 제목 "반 요약 통계"
+- [ ] 단계 4: "다음" → step 3
+  - 기대: `[data-tutorial-id='instructor-heatmap']` 스포트라이트 + 제목 "사고력 히트맵" + placement `top` + 설명에 "AI 인사이트" 언급 포함
+- [ ] 단계 5: "다음" → step 4
+  - 기대: `[data-tutorial-id='instructor-student-list']` 스포트라이트 + 제목 "학생 목록" + placement `top`
+- [ ] 단계 6: "완료" → 종료
+  - 기대: localStorage `thinkbridge_tutorial_instructor_v1 = "true"` 저장
+- [ ] 단계 7: 페이지 새로고침 → 재진입
+  - 기대: auto-trigger **안 됨**
+- [ ] 단계 8: DevTools Network → `/api/dashboard/classes/{id}/heatmap` 응답 인위적 지연 (Slow 3G) 후 페이지 로드
+  - 기대: 히트맵 로딩 중에는 튜토리얼 **표시 안 됨** (게이팅 조건 미충족) → 히트맵 도착 후에야 trigger
+
+**합격 기준**: 6/8 이상
+**비고**:
+- 반이 여러 개면 ClassSelector 로 다른 반을 선택해도 튜토리얼은 처음 1회만 뜬다 (storageKey 단위).
+- heatmap 로드 실패(500 에러 등) 시 `mHeatmap` 이 null 로 남아 auto-trigger 안 됨 — 정상 동작 (에러 상태에서 튜토리얼 강요하지 않음).
+
+---
+
+### V.19 — D.1 admin: 관리자 대시보드 튜토리얼 (4 steps)
+
+**목적**: `/admin/dashboard` 첫 방문 시 4단계 튜토리얼이 stats 로드 후 auto-trigger
+**선행 조건**:
+- `admin@demo.com` 로그인
+- localStorage `thinkbridge_tutorial_admin_v1` 키 **없음**
+
+**기대 결과**:
+- 게이팅: `!mIsLoading && !!mStats` → 통계 API 응답 완료 후 trigger
+- 4 steps: Demo 배너 → 통계 카드 → 반별 bar → 과목별 radar
+
+- [ ] 단계 1: `/admin/dashboard` 진입
+  - 기대: 통계 + 2개 차트 렌더 완료 후 튜토리얼 step 1/4 등장
+- [ ] 단계 2: step 1 타겟 확인
+  - 기대: `[data-tutorial-id='admin-demo-banner']` (상단 "데모 데이터입니다..." 안내 배너) 스포트라이트 + 제목 "데모 데이터 안내" + placement `bottom`
+- [ ] 단계 3: "다음" → step 2
+  - 기대: `[data-tutorial-id='admin-stats-cards']` (4 카드 컨테이너) 스포트라이트 + 제목 "전체 통계"
+- [ ] 단계 4: "다음" → step 3
+  - 기대: `[data-tutorial-id='admin-bar-chart']` (Card 컨테이너) 스포트라이트 + 제목 "반별 사고력 비교" + placement `top`
+- [ ] 단계 5: "다음" → step 4
+  - 기대: `[data-tutorial-id='admin-radar-chart']` 스포트라이트 + 제목 "과목별 6차원 레이더" + placement `top`
+- [ ] 단계 6: "완료" → 종료
+  - 기대: localStorage `thinkbridge_tutorial_admin_v1 = "true"` 저장
+- [ ] 단계 7: 재진입 시 auto-trigger 안 됨
+  - 기대: 정상 대시보드만 표시
+
+**합격 기준**: 6/7 이상
+**비고**:
+- 4 step 의 스포트라이트 사이즈가 요소 크기에 맞춰 각각 다름 — Card/BarChart 는 큰 영역, demo banner 는 가로로 긴 영역.
+- `mStats === null` 로딩 중에는 튜토리얼 안 뜸 (V.18과 동일 패턴).
+
+---
+
+### V.20 — D.1 공통: TutorialButton (?) 재실행 — 4 페이지
+
+**목적**: 완료 플래그가 저장된 이후에도 `?` 아이콘 버튼으로 언제든 튜토리얼 재실행 가능
+**선행 조건**:
+- 4개 페이지의 튜토리얼을 모두 1회 이상 완료한 상태 (localStorage 에 4개 키 모두 존재)
+- 또는 V.16-V.19 직후 연속 실행
+
+**이전 버그**: 없음 — 재학습 경로 제공이 기능 목표
+
+**기대 결과**: 각 페이지 상단에 `HelpCircle` 아이콘(`?`) + "튜토리얼 보기" `aria-label` + `title` 툴팁 → 클릭 시 해당 페이지 튜토리얼 처음부터 재시작
+
+- [ ] 단계 1: `/student/chat` 진입 (튜토리얼 완료 상태)
+  - 기대: auto-trigger 없음 (기존 완료 플래그) + 페이지 상단(`line 365` 부근, "새 대화 시작" 카드 헤더) 에 `?` 아이콘 존재
+- [ ] 단계 2: `?` 아이콘 hover
+  - 기대: `title` 툴팁 표시 (브라우저 기본 tooltip) + cursor pointer
+- [ ] 단계 3: `?` 클릭
+  - 기대: `startTutorial("chat")` 호출 → step 1/7 오버레이 등장 (완료 플래그 무시)
+- [ ] 단계 4: 튜토리얼 "건너뛰기" 버튼으로 종료 → 완료 플래그 업데이트 여부 확인
+  - 기대: "건너뛰기" 도 완료로 간주 (내부적으로 `completeTutorial`) — 플래그 유지 또는 재저장
+  - 비고: 일부 튜토리얼 엔진은 skip ≠ complete 로 구분 — 본 프로젝트는 동일 취급이 의도.
+- [ ] 단계 5: `/student/sessions` 이동 → `?` 아이콘 클릭
+  - 기대: sessions 튜토리얼 재실행 (step 1/3)
+- [ ] 단계 6: 오버레이 X 닫기 버튼 (우상단) 클릭
+  - 기대: 즉시 종료 + 포커스 복원
+- [ ] 단계 7: `/instructor/dashboard` → `?` 클릭 → step 1/4 재실행
+  - 기대: 반 선택기 하이라이트
+- [ ] 단계 8: `/admin/dashboard` → `?` 클릭 → step 1/4 재실행
+  - 기대: demo 배너 하이라이트
+- [ ] 단계 9: 접근성 — DevTools Elements 에서 `?` 버튼 속성 확인
+  - 기대: `aria-label="튜토리얼 보기"` (또는 유사 한국어) + `title` 속성 + `<button type="button">` (form submit 방지)
+
+**합격 기준**: 7/9 이상
+**비고**:
+- 4 페이지 모두 동일 `TutorialButton` 컴포넌트 재사용 — 일관된 UX.
+- `?` 버튼의 위치는 페이지마다 상단 헤더 영역 (오른쪽 끝, 다른 액션 버튼 옆).
+
+---
+
+### V.21 — D.1 공통: localStorage 완료 플래그 영속성
+
+**목적**: 완료 플래그가 브라우저 세션 간에 유지되어 사용자가 반복적으로 튜토리얼을 보지 않도록 보장
+**선행 조건**: 시크릿 창 or 깨끗한 localStorage
+**기대 결과**: 각 튜토리얼 1회 완료 시 `thinkbridge_tutorial_{id}_v1 = "true"` 저장. 브라우저 재시작/탭 close/reopen 후에도 유지.
+
+- [ ] 단계 1: 시크릿 창 + `/student/chat` 진입 → 튜토리얼 step 1 등장 → "건너뛰기" 클릭
+  - 기대: `thinkbridge_tutorial_chat_v1 = "true"` 저장 (DevTools Application 탭에서 확인)
+- [ ] 단계 2: 같은 세션에서 페이지 새로고침 (F5)
+  - 기대: auto-trigger **안 됨**
+- [ ] 단계 3: 탭 닫고 동일 시크릿 창에서 새 탭으로 `/student/chat` 재진입
+  - 기대: auto-trigger **안 됨** (localStorage 는 시크릿 창 동일 세션 내 유지)
+- [ ] 단계 4: DevTools Application → LocalStorage → `thinkbridge_tutorial_chat_v1` 우클릭 → Delete
+  - 기대: 키 제거
+- [ ] 단계 5: 페이지 새로고침
+  - 기대: auto-trigger **재개** (step 1/7 오버레이 등장)
+- [ ] 단계 6: 4개 튜토리얼 모두 완료 후 4개 키 모두 존재 확인
+  - 기대: `thinkbridge_tutorial_chat_v1`, `_sessions_v1`, `_instructor_v1`, `_admin_v1` 모두 `"true"`
+- [ ] 단계 7: 시크릿 창 닫고 새 시크릿 창으로 동일 플로우 시도
+  - 기대: 새 시크릿 창은 별도 storage partition → 모든 튜토리얼이 다시 auto-trigger (정상)
+- [ ] 단계 8 (버전 호환): 미래에 `TUTORIAL_STORAGE_KEY_VERSION` 이 `_v2` 로 bump 되면 `_v1` 키는 무시되고 튜토리얼이 다시 등장해야 함
+  - 기대: 현재 구현은 key 이름 자체가 version suffix 를 포함하므로 자동 invalidation 된다 (`_v2` 키 체크 → 없음 → auto-trigger)
+  - 검증: DevTools 에서 수동으로 `thinkbridge_tutorial_chat_v2` 키 추가 후 새로고침 → auto-trigger 안 됨
+
+**합격 기준**: 6/8 이상
+**비고**:
+- localStorage 는 동일 origin (protocol + host + port) 내에서 공유 — `localhost:3000` / `127.0.0.1:3000` 은 별개로 취급됨 (브라우저 보안 모델).
+- 사용자가 "튜토리얼을 절대 보지 않겠다" 고 결정한 경우 V.25 의 글로벌 disable 키 사용.
+
+---
+
+### V.22 — D.1 공통: 키보드 네비게이션
+
+**목적**: 마우스 없이도 키보드만으로 튜토리얼 완료/취소 가능
+**선행 조건**: 임의의 튜토리얼 오버레이 열린 상태 (`?` 버튼으로 trigger)
+**이전 버그**: 없음
+**기대 결과**:
+- `Esc` → 튜토리얼 즉시 닫기 (완료로 간주, 플래그 저장)
+- `Enter` or `ArrowRight` → 다음 스텝 (마지막 스텝에서는 "완료" 트리거)
+- `ArrowLeft` → 이전 스텝 (첫 스텝에서는 no-op)
+- 포커스 관리: 오버레이 열릴 때 툴팁 내 첫 focusable 요소로 포커스 이동, 닫힐 때 원래 포커스 복원
+
+- [ ] 단계 1: `/student/sessions` 튜토리얼 재실행 (`?` 클릭) → step 1/3 등장
+  - 기대: 오버레이 내 포커스가 툴팁 카드 영역 (예: "다음" 버튼)으로 이동
+- [ ] 단계 2: `ArrowRight` 키 누름
+  - 기대: step 2/3 으로 전환 (스포트라이트 이동 + 카운터 업데이트)
+- [ ] 단계 3: `Enter` 키 누름
+  - 기대: step 3/3 으로 전환
+- [ ] 단계 4: `ArrowLeft` 키 누름
+  - 기대: step 2/3 으로 복귀
+- [ ] 단계 5: 첫 스텝으로 복귀 (`ArrowLeft` × 1) → 다시 `ArrowLeft` 누름
+  - 기대: **no-op** (이미 첫 스텝 — 오류 없이 무시)
+- [ ] 단계 6: `Esc` 키 누름
+  - 기대: 오버레이 즉시 닫힘 + localStorage 플래그 저장 + 포커스 이전 위치로 복원
+- [ ] 단계 7: Tab 키로 포커스 순환 검증 (다시 오버레이 열고)
+  - 기대: Tab 순서 — X 닫기 → 건너뛰기 → 이전 → 다음 (step 에 따라 활성/비활성) → X 로 순환 (focus trap)
+- [ ] 단계 8: 스크린 리더 (NVDA/VoiceOver) 으로 오버레이 접근성 확인 (선택)
+  - 기대: `role="dialog"` 또는 유사 역할 + `aria-modal="true"` + `aria-labelledby` (툴팁 제목) + `aria-describedby` (설명) 속성 — 스크린 리더가 "튜토리얼 1 / 7" 등으로 읽음
+
+**합격 기준**: 6/8 이상 (8단계는 스크린 리더 환경 없으면 skip 가능)
+**비고**:
+- Focus trap 은 `TutorialOverlay.tsx` 내부에서 키 이벤트로 구현됨 — 일반적인 `<dialog>` focus trap 과는 다른 custom 구현.
+- `Esc` 는 skip 과 동일 취급 — completion 플래그 저장 (재학습은 `?` 버튼으로).
+
+---
+
+### V.23 — D.1 공통: 모바일 뷰포트 center fallback (< 768px)
+
+**목적**: 모바일 뷰포트에서 툴팁 placement 가 target 옆이 아닌 화면 중앙으로 fallback 되어 작은 화면에서도 가독성 유지
+**선행 조건**: DevTools Device Toolbar, 임의 튜토리얼 trigger 가능 상태
+**이전 버그**: 없음 (사전 예방 설계)
+**기대 결과**: `matchMedia("(max-width: ${TUTORIAL_MOBILE_BREAKPOINT_PX - 1}px)")` 매칭 시 모든 step 의 placement 를 `center` 로 강제 (스포트라이트는 유지, 툴팁만 중앙)
+
+- [ ] 단계 1: DevTools Device Toolbar → iPhone 14 Pro (390px 폭)
+  - 기대: 뷰포트 모바일 브레이크포인트 < 768px
+- [ ] 단계 2: `/student/chat` → `?` 버튼 클릭 (튜토리얼 재실행)
+  - 기대: step 1 오버레이 등장 — 스포트라이트는 `[data-tutorial-id='chat-subject-selector']` 에 정상 렌더 + 툴팁은 **화면 중앙**에 배치 (placement=`bottom` 무시)
+- [ ] 단계 3: "다음" × 여러 번 → 각 스텝마다 툴팁 위치 확인
+  - 기대: 모든 스텝에서 툴팁 `position: fixed` 중앙 + 스포트라이트는 각 타겟에 정상
+- [ ] 단계 4: Device Toolbar 해제 → 데스크톱 뷰포트 복귀 → 튜토리얼 재실행
+  - 기대: 툴팁 placement 가 각 step 의 원래 설정값 (top/bottom/left/right) 로 복원
+- [ ] 단계 5: Device Toolbar iPad (768px 폭 정확히) 시뮬레이션
+  - 기대: `matchMedia` 기준 `max-width: 767px` 이므로 768px 는 데스크톱으로 처리 — 원래 placement 유지
+- [ ] 단계 6: 767px 직접 지정 (Custom size) → 재확인
+  - 기대: center fallback 활성
+- [ ] 단계 7: 오버레이 열린 상태에서 Device Toolbar 토글 (모바일 → 데스크톱)
+  - 기대: 리사이즈 리스너(`resize` event) 가 placement 재계산 → 툴팁이 원래 위치로 re-position (애니메이션 transition 300ms)
+
+**합격 기준**: 5/7 이상
+**비고**:
+- `TUTORIAL_MOBILE_BREAKPOINT_PX = 768` 상수. 변경 시 `matchMedia` 쿼리도 자동 반영.
+- 툴팁의 `max-width: TUTORIAL_TOOLTIP_MAX_WIDTH_PX (360px)` 때문에 390px 뷰포트에서는 좌우 여백 15px 가량 확보됨 — 포털 내부에서 중앙 정렬.
+
+---
+
+### V.24 — D.1 chat: 동적 타겟 `waitForTarget` 5s timeout → center fallback
+
+**목적**: 채팅 튜토리얼의 post-session step (progress bar / thought panel / hint / end) 타겟이 아직 DOM에 없을 때, 5초 polling 후 center fallback 으로 전환되는지 확인
+**선행 조건**:
+- localStorage `thinkbridge_tutorial_chat_v1` 삭제
+- `/student/chat` 신규 진입 (세션 시작 전)
+
+**이전 버그**: 없음 (사전 예방 설계)
+
+**기대 결과**:
+- `waitForTarget(selector, TUTORIAL_WAIT_DEFAULT_TIMEOUT_MS = 5000)` 이 selector 를 못 찾으면 reject
+- 상위 코드는 reject 를 catch 하여 step placement 를 `center` 로 강제 + 스포트라이트는 "target null" 상태로 전체 백드롭만 렌더
+- 사용자는 중앙 툴팁에서 "다음/건너뛰기/완료" 선택 가능
+
+- [ ] 단계 1: `/student/chat` 진입 → 튜토리얼 auto-trigger step 1/7 (chat-subject-selector)
+  - 기대: 정상 하이라이트
+- [ ] 단계 2: "다음" × 2회 → step 3/7 (chat-start-button) 도달
+  - 기대: "대화 시작하기" 버튼 하이라이트 (이 시점에서는 아직 세션 시작 안 함)
+- [ ] 단계 3: "다음" 클릭 → step 4/7 (chat-progress-bar) 로 전환 시도
+  - 기대 A: `waitForTarget("[data-tutorial-id='chat-progress-bar']", 5000)` polling 시작 — 100ms 간격으로 `document.querySelector` 반복
+  - 기대 B: 5초 내에 progress bar 가 DOM 에 나타나지 않음 (세션 시작 안 함)
+- [ ] 단계 4: 5초 대기 (polling timeout) 관찰
+  - 기대: 5000ms 경과 후 Promise reject → 툴팁이 **화면 중앙** 으로 이동 + 스포트라이트 제거 (또는 null region) + 제목 "5단계 소크라테스 진행" + 설명은 유지
+- [ ] 단계 5: Console 에 경고 로그 확인 (선택)
+  - 기대: `console.warn("Tutorial target not found: [data-tutorial-id='chat-progress-bar']")` 또는 유사 (구현 세부 — 없을 수도 있음)
+- [ ] 단계 6: "다음" 클릭 → step 5 (thought panel) 로 진행
+  - 기대: 동일 원리로 center fallback
+- [ ] 단계 7: 끝까지 "완료" 클릭
+  - 기대: localStorage 저장 + 오버레이 종료
+- [ ] 단계 8 (대안 플로우): 재실행 (`?` 클릭) → step 3 에서 "다음" 클릭 전에 **다른 탭에서 대화 시작하기** 를 실제 클릭 → progress bar DOM 생성
+  - 기대: `waitForTarget` polling 이 5초 이내에 target 발견 → center fallback 없이 정상 하이라이트 전환
+
+**합격 기준**: 6/8 이상
+**비고**:
+- `TUTORIAL_WAIT_POLL_INTERVAL_MS = 100ms` → 5초 timeout 내 최대 50회 polling. DOM 변화 감지는 MutationObserver 가 아닌 polling (구현 단순성 우선).
+- 세션 진행 후 다시 pre-session step 1-3 을 보여주려면 페이지 새로고침 필요 (세션이 이미 활성이면 ChatInterface 가 pre-session 카드를 가림).
+
+---
+
+### V.25 — D.1 공통: z-[80] 상위 레이어링 + 글로벌 disable 키
+
+**목적**:
+- 튜토리얼 오버레이가 다른 모든 UI 오버레이 (end-session z-[70], Sheet sidebar z-50, ThoughtPanel floating button z-40) 보다 상위에 렌더되는지 확인
+- `thinkbridge_tutorial_disabled` localStorage 키로 모든 튜토리얼 auto-trigger 완전 억제 가능 (데모 day / 강의 녹화 등 상황)
+
+**선행 조건**: localStorage 튜토리얼 관련 키 모두 삭제 + 4개 페이지 방문 가능한 계정
+
+**이전 버그**: 없음
+
+**기대 결과**:
+- 튜토리얼 오버레이는 `z-[80]` — 가장 상위
+- `thinkbridge_tutorial_disabled = "true"` 설정 시 `useAutoStartTutorial` 이 no-op → auto-trigger 안 됨. 단, `?` 버튼 수동 실행은 별도 (disable 키 우회).
+
+- [ ] 단계 1: 채팅 세션 2-3턴 진행 후 "종료" 버튼 클릭
+  - 기대: end-session 오버레이 (z-[70]) + "사고 과정을 분석하고 있어요..." 등장
+- [ ] 단계 2: 이 상태에서 URL 수동으로 `/student/chat` 재진입 (튜토리얼 플래그 없는 상태 가정) — 리포트 페이지 이동 전에 튜토리얼 triggered 된다면
+  - 기대: 실질적으로 리포트로 이동하므로 본 step 은 edge case — 대신 아래 단계 3 으로 대체
+- [ ] 단계 3 (대체): `?` 버튼으로 튜토리얼 수동 실행 → 채팅 중 "종료" 누름과 동시에 타이밍 시도
+  - 기대: 튜토리얼 오버레이 (z-[80]) 가 종료 오버레이 (z-[70]) 위에 렌더 → 튜토리얼 보이고 종료 오버레이는 가려짐 (정상 — 튜토리얼은 모달성 최상위)
+- [ ] 단계 4: 모바일 뷰포트 + `/student/chat` + 튜토리얼 오버레이 열린 상태에서 햄버거 클릭 시도
+  - 기대: Sheet (z-50) 가 튜토리얼 (z-[80]) 아래에 렌더 → **사이드바 조작 불가** (튜토리얼이 모달이므로 의도적)
+- [ ] 단계 5: ThoughtPanel floating 버튼 (모바일, z-40) 클릭 시도
+  - 기대: 마찬가지로 튜토리얼 아래 → 조작 불가
+- [ ] 단계 6: DevTools Application → LocalStorage → `thinkbridge_tutorial_disabled` 키 수동 추가 + 값 `"true"`
+  - 기대: 키 생성됨
+- [ ] 단계 7: 4개 페이지 순회 (`/student/chat`, `/student/sessions`, `/instructor/dashboard`, `/admin/dashboard`) + 각 페이지의 localStorage 완료 플래그 삭제 후 방문
+  - 기대: **auto-trigger 완전 억제** (disable 키 우선) → 페이지 정상 UI 만 표시
+- [ ] 단계 8: 각 페이지에서 `?` 버튼 수동 클릭
+  - 기대: 튜토리얼 **실행되지 않음** — disable 키는 **auto-trigger + 수동 실행 모두 차단**하는 "글로벌 OFF 스위치" 역할 (2026-04-12 라이브 테스트로 확인된 실제 구현)
+  - 참고: 최초 시나리오 작성 시에는 "수동 실행은 허용" 을 기대했으나 자동 테스트에서 차단이 의도된 동작임이 확인됨 (`fix_verification_automated_results.md` §4 V.25 참조)
+- [ ] 단계 9: `thinkbridge_tutorial_disabled` 키 제거 후 완료 플래그도 삭제 + 페이지 재방문
+  - 기대: auto-trigger 재활성화
+
+**합격 기준**: 7/9 이상
+**비고**:
+- z-index 계층: `z-40` (ThoughtPanel 플로팅) < `z-50` (Sidebar Sheet) < `z-[70]` (end-session overlay) < `z-[80]` (Tutorial). Tailwind `z-[80]` 은 임의 값 지원 (`class="z-[80]"`).
+- 단계 8 **검증 결과**: 자동 테스트에서 disable 키가 `?` 수동 실행도 차단함이 확인됨. 시나리오 가정이 실제 구현에 맞게 정정됨 (2026-04-12). Disable 키 목적은 "demo day 에서 튜토리얼을 완전히 숨기기" 용도 — 강사가 필요 시 localStorage 에서 키를 제거하는 것이 공식 경로.
+
+---
+
+## §5. 통합 시나리오
 
 각 통합 시나리오는 여러 개별 fix를 하나의 사용자 플로우에서 연속 검증한다. 개별 시나리오를 먼저 통과한 후 시행 권장.
 
@@ -570,7 +968,7 @@
 
 ---
 
-## §5. 최종 체크리스트
+## §6. 최종 체크리스트
 
 각 이슈별로 테스터가 최종 합격 여부를 기록.
 
@@ -591,6 +989,16 @@
 | **C.1** (종료 버튼 4-state) | V.11 | ☐ | ☐ | ☐ | |
 | **C.2** (모바일 햄버거 위치) | V.12 | ☐ | ☐ | ☐ | Device Toolbar 필요 |
 | **L.9** (top-right 배너 유지) | V.1 (공유) | ☐ | ☐ | ☐ | A.1과 동일 시나리오 |
+| **D.1 chat** (7 steps auto+동적) | V.16 | ☐ | ☐ | ☐ | 신규 — localStorage 클리어 필수 |
+| **D.1 sessions** (3 steps first-card) | V.17 | ☐ | ☐ | ☐ | active+completed 각 1개 필요 |
+| **D.1 instructor** (4 steps) | V.18 | ☐ | ☐ | ☐ | 히트맵 데이터 필요 |
+| **D.1 admin** (4 steps) | V.19 | ☐ | ☐ | ☐ | stats API warm 권장 |
+| **D.1 re-launch** (? 버튼) | V.20 | ☐ | ☐ | ☐ | 4 페이지 공통 |
+| **D.1 localStorage** (영속성) | V.21 | ☐ | ☐ | ☐ | Application 탭 필요 |
+| **D.1 keyboard** (Esc/Enter/Arrow) | V.22 | ☐ | ☐ | ☐ | 스크린 리더는 선택 |
+| **D.1 mobile fallback** (< 768px) | V.23 | ☐ | ☐ | ☐ | Device Toolbar 필요 |
+| **D.1 waitForTarget timeout** | V.24 | ☐ | ☐ | ☐ | 5초 대기 필요 |
+| **D.1 z-layering + disable 키** | V.25 | ☐ | ☐ | ☐ | |
 
 ### 통합 시나리오 Pass / Fail / Skip
 
@@ -604,9 +1012,10 @@
 
 - [ ] 모든 CRITICAL 시나리오 (V.7) 통과
 - [ ] 모든 §1-§3 개별 시나리오 12개 중 10개 이상 통과
-- [ ] 모든 §4 통합 시나리오 3개 모두 합격 기준 충족
+- [ ] 모든 §4 튜토리얼 시나리오 10개 중 **8개 이상** 통과 (V.16-V.25)
+- [ ] 모든 §5 통합 시나리오 3개 모두 합격 기준 충족
 - [ ] Console 에러 누적 없음 (정상 동작 중 unhandled rejection / React warning 없음)
-- [ ] 스크린샷 캡처 — 수동 테스트 시 주요 결과물을 `docs/test/user_test/screenshots/fix_V{N}_{description}.png` 경로에 저장
+- [ ] 스크린샷 캡처 — 수동 테스트 시 주요 결과물을 `docs/test/user_test/screenshots/fix_V{N}_{description}.png` 경로에 저장 (튜토리얼은 스포트라이트 + 툴팁 카드가 모두 보이는 프레임)
 
 테스터: ___________________
 날짜: ___________________
@@ -687,7 +1096,14 @@
 2. `/student/chat` 햄버거 위치 = 좌하단, `/student/sessions` = 우하단
 3. **체크**: 채팅 페이지에서 Send/종료 버튼과 햄버거가 겹치지 않음
 
-5가지 모두 통과 시 **빠른 스모크 합격** — 상세 시나리오 생략 가능 (판단 재량).
+### Step 6: 튜토리얼 auto-trigger + ? 재실행 (V.16/V.20 축약)
+1. DevTools Application → LocalStorage → `thinkbridge_tutorial_chat_v1` 삭제
+2. `/student/chat` 재진입 → step 1/7 오버레이 등장 확인
+3. "건너뛰기" → localStorage 플래그 저장 확인
+4. 페이지 상단 `?` 아이콘 클릭 → 튜토리얼 재실행 확인
+5. **체크**: auto-trigger + completion 저장 + `?` 재실행 모두 동작
+
+6가지 모두 통과 시 **빠른 스모크 합격** — 상세 시나리오 생략 가능 (판단 재량).
 
 ---
 
@@ -781,11 +1197,24 @@ V.10 ──── V.15 (강사 리플레이 헤더)
 V.11 (독립)
 
 V.12 ──── V.13 (모바일 뷰포트 부분)
+
+V.16 (chat auto+동적) ────┐
+V.17 (sessions first-card) ├── V.20 (? 재실행 공통)
+V.18 (instructor 4 steps) ─┤
+V.19 (admin 4 steps) ──────┤
+                           ├── V.21 (localStorage 영속성 — 4 튜토리얼 공통)
+                           ├── V.22 (키보드 네비 — 4 튜토리얼 공통)
+                           ├── V.23 (모바일 center fallback — 4 튜토리얼 공통)
+                           ├── V.24 (waitForTarget timeout — chat 특화)
+                           └── V.25 (z-[80] 레이어링 + disable 키)
 ```
 
-**권장 실행 순서**: V.1 → V.3 → V.5 → V.6 → V.9 → V.2 → V.11 → V.12 → V.4 → V.7 → V.8 → V.10 → V.13 → V.14 → V.15
+**권장 실행 순서**:
+1. **§1-§3 개별 fix**: V.1 → V.3 → V.5 → V.6 → V.9 → V.2 → V.11 → V.12 → V.4 → V.7 → V.8 → V.10
+2. **§4 튜토리얼**: V.21(영속성 선 셋업) → V.16 → V.17 → V.18 → V.19 → V.20(재실행) → V.22(키보드) → V.23(모바일) → V.24(타임아웃) → V.25(레이어링)
+3. **§5 통합**: V.13 → V.14 → V.15
 
-의존성이 낮은 시나리오부터 빠르게 돌려 회귀 탐지 후, V.13-V.15 로 통합 검증하는 순서가 효율적.
+§4 튜토리얼은 localStorage 상태에 의존적이므로 V.21 (영속성 동작 원리) 을 먼저 이해한 후 V.16-V.19 실행 시 플래그 삭제를 체계적으로 수행하면 혼란이 적다.
 
 ---
 
@@ -793,6 +1222,8 @@ V.12 ──── V.13 (모바일 뷰포트 부분)
 
 | 날짜 | 변경 사항 | 작성자 |
 |------|----------|-------|
-| 2026-04-12 | v1.0 최초 작성 — 12 이슈 × 15 시나리오 | ThinkBridge Team |
+| 2026-04-12 | v1.0 최초 작성 — 12 이슈 × 15 시나리오 (A.1-A.4 / B.1-B.5 / C.1-C.2 + 통합 3) | ThinkBridge Team |
+| 2026-04-12 | v1.1 — 튜토리얼 D.1 (10 시나리오 V.16-V.25) 추가. commits `e16fec7` (Phase 2 core) + `514d190` (work log) + `5badfb7` (Phase 3 integration). 총 시나리오 25개. §4 신설, 기존 §4/§5 → §5/§6 로 renumber. 최종 체크리스트 + 스모크(Step 6) + 의존성 다이어그램 + 권장 실행 순서 업데이트. | ThinkBridge Team |
+| 2026-04-12 | v1.2 — Playwright 자동 테스트 반영. V.25 단계 8 `?` 버튼 동작이 **disable 키 존중 (차단)** 으로 정정 (자동 테스트 결과 실 구현과 원시나리오 가정 불일치 발견). 결과 보고서 `fix_verification_automated_results.md` + 잔여 수동 체크리스트 `fix_verification_manual_remaining.md` 추가. | ThinkBridge Team |
 
 후속 fix batch가 있다면 별도 `fix_verification_scenarios_v2.md` 로 작성하거나 본 문서에 이어붙이기.

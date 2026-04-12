@@ -31,6 +31,7 @@ import {
 import { ProgressBar } from "@/components/chat/ProgressBar";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ThoughtPanel } from "@/components/chat/ThoughtPanel";
+import { TutorialButton } from "@/components/tutorial/TutorialButton";
 import { streamMessages, endSession } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { DEFAULT_SOCRATIC_STAGE, GUEST_MAX_TURNS, SUBJECT_LABELS, clampSocraticStage } from "@/lib/constants";
@@ -507,8 +508,8 @@ export function ChatInterface({
                 data-tutorial-id="chat-progress-bar"
                 className="shrink-0 border-b border-indigo-100/50 bg-white p-3"
             >
-                <div className="mb-2 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                         <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-xs text-indigo-700">
                             {tSubjectLabel}
                         </Badge>
@@ -526,6 +527,7 @@ export function ChatInterface({
                             </Badge>
                         )}
                     </div>
+                    <TutorialButton tutorialId="chat" className="shrink-0" />
                 </div>
                 <ProgressBar currentStage={mCurrentStage} />
             </div>
