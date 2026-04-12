@@ -100,28 +100,11 @@ async function* streamMessages(sessionId: number, content: string, token: string
     }
 }
 
-function parseSSEBuffer(buffer: string) {
-    const events: SSEEvent[] = [];
-    const lines = buffer.split('\n');
-    let remaining = '';
-    let currentEvent: Partial<SSEEvent> = {};
-
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (line.startsWith('event: ')) {
-            currentEvent.type = line.slice(7).trim();
-        } else if (line.startsWith('data: ')) {
-            currentEvent.data = JSON.parse(line.slice(6).trim());
-        } else if (line === '' && currentEvent.type) {
-            events.push(currentEvent as SSEEvent);
-            currentEvent = {};
-        } else if (i === lines.length - 1 && line !== '') {
-            remaining = line;
-        }
-    }
-
-    return { parsed: events, remaining };
-}
+// parseSSEBuffer 구현은 `frontend/src/lib/api.ts`를 참조.
+// CRLF 종결자 (`\r\n\r\n`) 및 LF-only 변종을 regex로 모두 처리함
+// (`SSE_EVENT_BOUNDARY_REGEX = /\r\n\r\n|\r\r|\n\n/`).
+// `sse_starlette`는 CRLF를 사용하므로 `\n`만 split하면 이벤트 파싱이 실패함
+// (과거 버그, `docs/bug_fix/v1/bug_report.md` 참조).
 ```
 
 ## Core Components
@@ -383,8 +366,13 @@ interface ThoughtAnalysis {
 }
 
 interface SSEEvent {
-    type: "token" | "analysis" | "done";
-    data: string | ThoughtAnalysis | Record<string, never>;
+    type: "token" | "analysis" | "done" | "error";
+    data: string | ThoughtAnalysis | Record<string, never> | ErrorEventData;
+}
+
+interface ErrorEventData {
+    message: string;
+    code?: string;  // AI_API_ERROR, DB_SAVE_FAILED, STREAM_UNEXPECTED 등
 }
 
 interface Report {
