@@ -78,6 +78,10 @@ TOPIC_TOO_LONG_DETAIL = f"주제는 {MAX_TOPIC_LENGTH}자 이내로 입력해주
 MESSAGE_CONTENT_EMPTY_DETAIL = "메시지 내용을 입력해주세요."
 MESSAGE_CONTENT_TOO_LONG_DETAIL = f"메시지는 {MAX_MESSAGE_CONTENT_LENGTH}자 이내로 입력해주세요."
 
+# DB 저장 실패 시 클라이언트 알림 (done 이후 error 이벤트로 전송)
+DB_SAVE_FAILED_MESSAGE = "응답을 저장하지 못했습니다. 페이지를 새로고침해주세요."
+DB_SAVE_FAILED_CODE = "DB_SAVE_FAILED"
+
 # AI 엔진 분석 결과 snake_case → ThoughtAnalysis 모델 mPascalCase 매핑
 ANALYSIS_FIELD_MAPPING = {
     "problem_understanding": "mProblemUnderstanding",
@@ -568,10 +572,23 @@ async def sendMessage(
                     tokenUsageData=tTokenUsageData,
                 )
             except Exception as tSaveError:
-                logger.error(
-                    "Failed to save AI response to DB for session %d: %s",
-                    tSessionId, tSaveError,
+                # 스트림은 이미 done 이벤트 전송 완료된 상태 — 추가로 error 이벤트를 yield하여
+                # 클라이언트가 "저장 실패" 상태를 인지하고 새로고침/재시도할 수 있게 함.
+                # 자세한 맥락: docs/revise_plan_v3/01_critical_fixes.md P0-2
+                logger.exception(
+                    "Failed to save AI response to DB for session %d",
+                    tSessionId,
                 )
+                yield {
+                    "event": EVENT_TYPE_ERROR,
+                    "data": json.dumps(
+                        {
+                            "message": DB_SAVE_FAILED_MESSAGE,
+                            "code": DB_SAVE_FAILED_CODE,
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
 
     return EventSourceResponse(generateSseEvents())
 
@@ -640,11 +657,12 @@ async def _saveAiResponseToDb(
 
         except Exception as tError:
             await tDb.rollback()
-            logger.error(
-                "DB save failed for session %d, turn %d: %s",
-                sessionId, turnNumber, tError,
+            logger.exception(
+                "CRITICAL: AI response DB save failed for session %d, turn %d. "
+                "Client-side state may diverge from DB.",
+                sessionId, turnNumber,
             )
-            raise
+            raise  # keep existing re-raise
 
 
 @router.patch("/{sessionId}/end", response_model=SessionResponse)
