@@ -33,6 +33,9 @@ const ERROR_STREAM_NO_BODY = "서버 응답에 스트림 본문이 없습니다.
 const SSE_EVENT_PREFIX = "event:";
 const SSE_DATA_PREFIX = "data:";
 
+/** 스트림 종료 시 종결자 없는 최종 이벤트 flush용 가상 경계 (SSE blank line) */
+const SSE_STREAM_END_BOUNDARY = "\n\n";
+
 /**
  * Regex matching SSE event boundaries (blank line between events).
  * Handles all valid SSE line endings: \r\n, \r, or \n.
@@ -289,6 +292,13 @@ export async function* streamMessages(
 
         if (done)
         {
+            // 스트림 종료 시 종결자 없는 최종 이벤트 방어적 flush.
+            // parseSSEBuffer는 empty/whitespace 버퍼에 no-op이므로 가드 불필요.
+            const tFinalResult = parseSSEBuffer(tBuffer + SSE_STREAM_END_BOUNDARY);
+            for (const tEvent of tFinalResult.events)
+            {
+                yield tEvent;
+            }
             break;
         }
 
