@@ -593,6 +593,32 @@ async def sendMessage(
                 ),
             }
 
+        # Guest 턴 보상 감소 — AI 응답이 완전히 실패한 경우만
+        # CAS(L433-441)로 선증가된 mTotalTurns를 다시 내려 게스트가 5턴 중 1턴을
+        # 허무하게 잃지 않게 함. WHERE mTotalTurns > 0 조건으로 idempotent 보장
+        # (중복 compensation 방어). 자세한 맥락: docs/revise_plan_v3/02_high_priority.md P1-1
+        if tHasError and not tCollectedText and tIsGuest:
+            try:
+                from app.database import async_session_maker
+                async with async_session_maker() as tCompDb:
+                    await tCompDb.execute(
+                        update(TutoringSession)
+                        .where(TutoringSession.mId == tSessionId)
+                        .where(TutoringSession.mTotalTurns > 0)
+                        .values(mTotalTurns=TutoringSession.mTotalTurns - 1)
+                    )
+                    await tCompDb.commit()
+                    logger.info(
+                        "Compensated guest turn decrement for session %d (AI response failed)",
+                        tSessionId,
+                    )
+            except Exception as tCompError:
+                # 보상 실패해도 스트림 종료는 진행 — 클라이언트는 이미 error 이벤트 수신
+                logger.exception(
+                    "Compensation decrement failed for session %d",
+                    tSessionId,
+                )
+
         # 스트림 완료 후 DB에 AI 응답 + 분석 + 토큰 사용량 저장
         if not tHasError and tCollectedText:
             try:
