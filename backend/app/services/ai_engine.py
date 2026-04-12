@@ -74,6 +74,10 @@ CONTENT_TYPE_TOOL_USE = "tool_use"
 OVERLOAD_RETRY_COUNT = 2
 OVERLOAD_RETRY_DELAY_SECONDS = 3
 
+# Anthropic HTTP 상태 코드 상수 (SDK는 OverloadedError를 top-level로 노출하지 않음)
+OVERLOAD_STATUS_CODE = 529
+RATE_LIMIT_STATUS_CODE = 429
+
 # 사용자 친화 에러 메시지
 OVERLOADED_ERROR_MESSAGE = "AI 서버가 일시적으로 바쁩니다. 잠시 후 다시 시도해주세요."
 RATE_LIMIT_ERROR_MESSAGE = "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
@@ -365,8 +369,19 @@ async def processTurnStreaming(
                 yield tEvent
             return  # 성공 시 함수 종료
 
-        except anthropic.OverloadedError as tError:
-            # AI 서버 과부하 — 잠시 후 재시도
+        except anthropic.InternalServerError as tError:
+            # SDK가 OverloadedError를 top-level로 노출하지 않아 5xx 전체를 InternalServerError로 받고
+            # 내부에서 status_code로 529(Overloaded)만 재시도, 그 외 5xx(502/503/504)는 상위로 전파
+            tStatus = getattr(tError, 'status_code', None)
+            if tStatus != OVERLOAD_STATUS_CODE:
+                # 기타 5xx 오류 — 재시도 대상이 아님, 상위 핸들러로 전파
+                logger.error(
+                    "Claude API non-overload 5xx (status=%s): %s",
+                    tStatus, tError,
+                )
+                raise
+
+            # AI 서버 과부하(529) — 잠시 후 재시도
             if tAttempt < tMaxRetries:
                 tWaitSeconds = OVERLOAD_RETRY_DELAY_SECONDS * (tAttempt + 1)
                 logger.warning(
