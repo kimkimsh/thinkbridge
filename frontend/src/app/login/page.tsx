@@ -19,6 +19,9 @@ import { Brain, ArrowRight, Sparkles, MessageCircle, BarChart3, GraduationCap } 
 
 const ERROR_EMPTY_FIELDS = "이메일과 비밀번호를 입력해주세요.";
 
+/** 게스트 체험 로그인 실패 시 기본 표시 메시지 */
+const GUEST_LOGIN_FALLBACK_ERROR = "게스트 체험 시작에 실패했습니다. 잠시 후 다시 시도해주세요.";
+
 /** Feature highlights for the brand panel */
 const BRAND_FEATURES = [
     {
@@ -85,12 +88,18 @@ export default function LoginPage()
     async function handleGuestTrial()
     {
         setIsGuestLoading(true);
+        setError("");
         try
         {
             await loginAsGuest();
         }
-        catch
+        catch (tError)
         {
+            // 기존에는 catch가 비어 실패 시 사용자는 버튼만 복구되고 원인을 알 수 없었음.
+            // 폼 에러 배너를 재사용하여 실패 원인을 표면화.
+            const tMessage = tError instanceof Error ? tError.message : GUEST_LOGIN_FALLBACK_ERROR;
+            setError(tMessage);
+            console.error("Guest login failed", tError);
             setIsGuestLoading(false);
         }
     }

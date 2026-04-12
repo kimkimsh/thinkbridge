@@ -29,6 +29,7 @@ import {
     CheckCircle,
     Lightbulb,
     GraduationCap,
+    AlertCircle,
 } from "lucide-react";
 
 
@@ -109,6 +110,12 @@ const ANIMATION_STAGGER_DELAY_MS = 150;
 /** Hero 텍스트 애니메이션 딜레이 단위 (ms) */
 const HERO_STAGGER_DELAY_MS = 200;
 
+/** 게스트 체험 로그인 실패 시 기본 표시 메시지 */
+const GUEST_LOGIN_FALLBACK_ERROR = "게스트 체험 시작에 실패했습니다. 잠시 후 다시 시도해주세요.";
+
+/** 데모 계정 로그인 실패 시 기본 표시 메시지 */
+const DEMO_LOGIN_FALLBACK_ERROR = "데모 로그인에 실패했습니다. 잠시 후 다시 시도해주세요.";
+
 
 // --- Custom Hook: Scroll-triggered fade-in ---
 
@@ -154,6 +161,9 @@ export default function LandingPage()
     const [mIsGuestLoading, setIsGuestLoading] = useState(false);
     const [mDemoLoadingRole, setDemoLoadingRole] = useState<string | null>(null);
     const [mHeroLoaded, setHeroLoaded] = useState(false);
+    // 게스트/데모 로그인 실패를 사용자에게 표시하기 위한 에러 상태.
+    // 기존 catch 블록이 완전히 조용했기 때문에 Render cold start 등 실패 시 원인 불명으로 멈춘 것처럼 보였음.
+    const [mError, setError] = useState<string | null>(null);
 
     // 백엔드 cold start 방지를 위한 warm-up 호출
     useEffect(() =>
@@ -182,13 +192,19 @@ export default function LandingPage()
     async function handleGuestTrial()
     {
         setIsGuestLoading(true);
+        setError(null);
         try
         {
             await loginAsGuest();
             // loginAsGuest가 내부적으로 리다이렉트 처리함
         }
-        catch
+        catch (tError)
         {
+            // 이전에는 catch가 비어 있어 실패 시 로딩만 풀리고 사용자는 원인을 알 수 없었음.
+            // 운영 중 가장 흔한 실패 원인인 백엔드 cold start / 네트워크 오류를 사용자에게 표면화.
+            const tMessage = tError instanceof Error ? tError.message : GUEST_LOGIN_FALLBACK_ERROR;
+            setError(tMessage);
+            console.error("Guest login failed", tError);
             setIsGuestLoading(false);
         }
     }
@@ -199,14 +215,18 @@ export default function LandingPage()
     async function handleDemoLogin(role: keyof typeof DEMO_ACCOUNTS)
     {
         setDemoLoadingRole(role);
+        setError(null);
         try
         {
             const tAccount = DEMO_ACCOUNTS[role];
             await login(tAccount.email, tAccount.password);
             // login이 내부적으로 리다이렉트 처리함
         }
-        catch
+        catch (tError)
         {
+            const tMessage = tError instanceof Error ? tError.message : DEMO_LOGIN_FALLBACK_ERROR;
+            setError(tMessage);
+            console.error("Demo login failed", tError, { role });
             setDemoLoadingRole(null);
         }
     }
@@ -215,6 +235,26 @@ export default function LandingPage()
         <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
             {/* Navbar */}
             <Navbar />
+
+            {/* 게스트/데모 로그인 실패 에러 배너 — 상단 우측 고정, 사용자가 수동으로 닫을 수 있음 */}
+            {mError && (
+                <div className="fixed right-4 top-20 z-50 max-w-sm rounded-lg border border-red-200 bg-red-50 p-3 shadow-lg shadow-red-100/60">
+                    <div className="flex items-start gap-2">
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                        <div className="flex-1">
+                            <p className="text-sm text-red-700">{mError}</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setError(null)}
+                            className="shrink-0 text-xs text-red-500 hover:text-red-700"
+                            aria-label="에러 메시지 닫기"
+                        >
+                            닫기
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Hero Section */}
             <section className="relative overflow-hidden">
