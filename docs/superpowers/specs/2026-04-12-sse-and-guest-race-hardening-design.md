@@ -137,6 +137,8 @@ const SSE_STREAM_END_BOUNDARY = "\n\n";
 
 ### 4.2 Fix #5 — Guest 5턴 Race Condition 방어
 
+> **⚠️ SUPERSEDED 2026-04-12**: 실 프로덕션에서 SELECT FOR UPDATE가 SQLAlchemy async + NullPool + Supabase Pooler 조합에서 동시 요청을 직렬화하지 못함을 실측. 구현은 atomic UPDATE ... WHERE mTotalTurns < 5 ... RETURNING (CAS) 패턴으로 대체 (커밋 e1db1c5). 자세한 내용: `docs/work_log/09_sse_and_race_hardening.md` §CAS 재설계 섹션.
+
 **파일**: `backend/app/routers/sessions.py`
 **함수**: `sendMessage` (line 345-561)
 
