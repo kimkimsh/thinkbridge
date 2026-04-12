@@ -268,11 +268,14 @@ function parseSSEBuffer(buffer: string): ParsedSSEResult
  * SSE streaming via fetch + ReadableStream (NOT EventSource).
  * EventSource only supports GET; this endpoint requires POST with JSON body.
  * Yields SSEEvent objects as they arrive from the server.
+ *
+ * @param signal - Optional AbortSignal for cancelling the stream (unmount/new send 시 사용).
  */
 export async function* streamMessages(
     sessionId: number,
     content: string,
     token: string,
+    signal?: AbortSignal,
 ): AsyncGenerator<SSEEvent>
 {
     const tResponse = await fetch(`${API_URL}/api/sessions/${sessionId}/messages`, {
@@ -282,6 +285,7 @@ export async function* streamMessages(
             "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({ content }),
+        signal,
     });
 
     if (!tResponse.ok)
@@ -326,6 +330,13 @@ export async function* streamMessages(
 
     while (true)
     {
+        // 컴포넌트 언마운트나 새 send 시 abort 신호를 감지하여 reader 해제.
+        if (signal?.aborted)
+        {
+            tReader.cancel();
+            break;
+        }
+
         const { done, value } = await tReader.read();
 
         if (done)

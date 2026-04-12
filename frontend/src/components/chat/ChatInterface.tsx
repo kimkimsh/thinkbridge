@@ -138,6 +138,13 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
      */
     const mAnimationTimer: MutableRefObject<ReturnType<typeof setInterval> | null> = useRef(null);
 
+    /**
+     * AbortController handle for the current SSE stream.
+     * - 새 메시지 전송 시 이전 스트림 중단
+     * - 컴포넌트 언마운트 시 스트림 중단 (리소스 누수 방지)
+     */
+    const mAbortRef: MutableRefObject<AbortController | null> = useRef(null);
+
     // --- Hooks ---
     const { token } = useAuth();
     const router = useRouter();
@@ -198,6 +205,16 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
         };
     }, []);
 
+    // Clean up in-flight SSE stream on unmount to prevent resource leak.
+    // 페이지 이동/컴포넌트 언마운트 시 진행 중인 fetch를 취소하여 네트워크 리소스 확보.
+    useEffect(() =>
+    {
+        return () =>
+        {
+            mAbortRef.current?.abort();
+        };
+    }, []);
+
     // --- Derived State ---
     const tSubjectLabel = SUBJECT_LABELS[subject] || subject;
     const tIsGuestLimitReached = isGuest === true && mTurnCount >= GUEST_MAX_TURNS;
@@ -251,6 +268,12 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
 
         setErrorMessage(null);
 
+        // 이전 진행 중이던 스트림이 있다면 abort 후 새 controller 생성.
+        // 일반적으로 mIsStreaming 가드 때문에 도달하지 않지만, race 방어 차원에서 정리.
+        mAbortRef.current?.abort();
+        mAbortRef.current = new AbortController();
+        const tSignal = mAbortRef.current.signal;
+
         // Add user message to conversation
         const tUserMessage: ChatMessage = { role: "user", content: content.trim() };
         setMessages((prev) => [...prev, tUserMessage]);
@@ -270,7 +293,7 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
         try
         {
             // Stream AI response via SSE
-            for await (const tEvent of streamMessages(sessionId, content.trim(), token))
+            for await (const tEvent of streamMessages(sessionId, content.trim(), token, tSignal))
             {
                 if (tEvent.type === "token")
                 {
@@ -318,6 +341,17 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
         }
         catch (error)
         {
+            // 의도적 abort (언마운트 / 새 send) → UI에 에러로 표시하지 않고 조용히 종료.
+            if (error instanceof Error && error.name === "AbortError")
+            {
+                stopAnimationLoop();
+                mStreamingTextRef.current = "";
+                mTokenBuffer.current = "";
+                mDisplayedText.current = "";
+                setStreamingText("");
+                return;
+            }
+
             // Stop animation on error
             stopAnimationLoop();
 
