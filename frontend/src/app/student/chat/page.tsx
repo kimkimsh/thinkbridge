@@ -8,16 +8,17 @@
  */
 
 import { useState, useCallback, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { MessageCircle, BookOpen, FlaskConical, PenLine, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChatInterface } from "@/components/chat/ChatInterface";
+import { ChatInterface, type ChatMessage } from "@/components/chat/ChatInterface";
 import { useAuth } from "@/lib/auth";
-import { createSession, getSessionDetail } from "@/lib/api";
-import { SUBJECT_LABELS, GUEST_MAX_TURNS } from "@/lib/constants";
+import { createSession, getSessionDetail, normalizeErrorMessage } from "@/lib/api";
+import { SUBJECT_LABELS, GUEST_MAX_TURNS, DEFAULT_SOCRATIC_STAGE } from "@/lib/constants";
+import type { SessionDetail, MessageWithAnalysis, ThoughtAnalysis } from "@/types";
 
 
 // --- Constants ---
@@ -92,6 +93,77 @@ const DEFAULT_TOPIC_PLACEHOLDER = "학습하고 싶은 주제를 입력하세요
 /** Suspense fallback placeholder text */
 const SUSPENSE_FALLBACK_TEXT = "로딩 중...";
 
+/** 종료된 세션 상태 값 (백엔드 SessionStatus enum과 일치) */
+const SESSION_STATUS_COMPLETED = "completed";
+
+/** 세션 로딩 중 표시할 안내 메시지 */
+const SESSION_LOADING_TITLE = "이전 대화를 불러오고 있어요...";
+const SESSION_LOADING_SUBTITLE = "잠시만 기다려 주세요";
+
+
+// --- Helpers (session detail → ChatInterface props) ---
+
+/**
+ * 세션 상세 응답의 MessageWithAnalysis[] 를 ChatInterface가 사용하는 ChatMessage[] 로 변환한다.
+ *
+ * 정렬 기준:
+ *   1) turnNumber 오름차순
+ *   2) 같은 turnNumber 내에서 user → assistant (대화 흐름 보존)
+ *
+ * API 응답이 이미 정렬되어 있더라도, 클라이언트 측에서도 방어적으로 재정렬한다.
+ */
+function convertDetailMessagesToChatMessages(messages: MessageWithAnalysis[]): ChatMessage[]
+{
+    const tSorted = [...messages].sort((a, b) =>
+    {
+        if (a.turnNumber !== b.turnNumber)
+        {
+            return a.turnNumber - b.turnNumber;
+        }
+        // 같은 턴이면 user 먼저
+        if (a.role === "user" && b.role !== "user")
+        {
+            return -1;
+        }
+        if (a.role !== "user" && b.role === "user")
+        {
+            return 1;
+        }
+        return 0;
+    });
+
+    return tSorted.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+    }));
+}
+
+/**
+ * 가장 최근 assistant 메시지의 분석 결과를 찾는다.
+ * ChatInterface 의 ThoughtPanel 을 마지막 상태로 복원하기 위함.
+ */
+function getLastAssistantAnalysis(messages: MessageWithAnalysis[]): ThoughtAnalysis | null
+{
+    for (let i = messages.length - 1; i >= 0; i--)
+    {
+        const tMsg = messages[i];
+        if (tMsg.role === "assistant" && tMsg.analysis)
+        {
+            return tMsg.analysis;
+        }
+    }
+    return null;
+}
+
+/**
+ * 가장 최근 분석의 소크라테스 단계를 반환. 없으면 기본값(1)으로 fallback.
+ */
+function getLastStageFromAnalyses(messages: MessageWithAnalysis[]): number
+{
+    const tLast = getLastAssistantAnalysis(messages);
+    return tLast?.socraticStage ?? DEFAULT_SOCRATIC_STAGE;
+}
+
 
 // --- Inner Component (uses useSearchParams) ---
 
@@ -103,10 +175,15 @@ function ChatPageInner()
     const [mSessionId, setSessionId] = useState<number | null>(null);
     const [mIsCreating, setIsCreating] = useState(false);
     const [mError, setError] = useState<string | null>(null);
+    // 재개 시 로드한 세션 상세(메시지 + 분석). ChatInterface seed 데이터.
+    const [mLoadedDetail, setLoadedDetail] = useState<SessionDetail | null>(null);
+    // 세션 상세 로딩 진행 여부. 스피너 UI 표시에 사용.
+    const [mIsLoadingSession, setIsLoadingSession] = useState<boolean>(false);
 
     // --- Hooks ---
     const { user, token } = useAuth();
     const searchParams = useSearchParams();
+    const router = useRouter();
 
     // --- Derived ---
     const tIsGuest = user?.isGuest === true;
@@ -114,7 +191,11 @@ function ChatPageInner()
     const tCanStart = mTopicInput.trim().length > 0 && !mIsCreating;
 
     /**
-     * If sessionId search param is present, load that session and render ChatInterface directly.
+     * sessionId 쿼리 파라미터 감지 시 해당 세션을 불러와 메시지/분석/턴 카운트를 복원한다.
+     *
+     * - 로딩 중에는 스피너만 표시하여, 빈 "새 대화 시작" 카드가 잠깐 번쩍이는 UX 깨짐을 방지.
+     * - completed 세션에 재접속한 경우 편집 방지 목적으로 리포트 페이지로 리다이렉트.
+     * - 실패 시 친숙한 한국어 메시지로 사용자에게 안내.
      */
     useEffect(() =>
     {
@@ -124,7 +205,7 @@ function ChatPageInner()
             return;
         }
 
-        const tParsedId = Number(tSessionIdParam);
+        const tParsedId = parseInt(tSessionIdParam, 10);
         if (isNaN(tParsedId))
         {
             return;
@@ -132,23 +213,44 @@ function ChatPageInner()
 
         let tIsCancelled = false;
 
+        setIsLoadingSession(true);
+        setError(null);
+
         async function loadExistingSession()
         {
             try
             {
                 const tDetail = await getSessionDetail(tParsedId, token!);
+                if (tIsCancelled)
+                {
+                    return;
+                }
+
+                // 종료된 세션은 수정 불가 - 리포트 페이지로 이동
+                if (tDetail.status === SESSION_STATUS_COMPLETED)
+                {
+                    router.replace(`/student/report/${tDetail.id}`);
+                    return;
+                }
+
+                setLoadedDetail(tDetail);
+                setSessionId(tDetail.id);
+                setSelectedSubject(tDetail.subject);
+                setTopicInput(tDetail.topic);
+            }
+            catch (error)
+            {
                 if (!tIsCancelled)
                 {
-                    setSessionId(tDetail.id);
-                    setSelectedSubject(tDetail.subject);
+                    console.error("Failed to load session", error);
+                    setError(normalizeErrorMessage(error));
                 }
             }
-            catch
+            finally
             {
-                // 세션 로드 실패 시 새 대화 시작 UI 유지
                 if (!tIsCancelled)
                 {
-                    setError("기존 세션을 불러올 수 없습니다. 새 대화를 시작하세요.");
+                    setIsLoadingSession(false);
                 }
             }
         }
@@ -159,7 +261,7 @@ function ChatPageInner()
         {
             tIsCancelled = true;
         };
-    }, [searchParams, token]);
+    }, [searchParams, token, router]);
 
     /**
      * Creates a new tutoring session and transitions to chat interface.
@@ -181,8 +283,8 @@ function ChatPageInner()
         }
         catch (error)
         {
-            const tMsg = error instanceof Error ? error.message : "세션 생성 중 오류가 발생했습니다.";
-            setError(tMsg);
+            // "Failed to fetch" 등 브라우저 원문 메시지를 한국어 친화 메시지로 치환
+            setError(normalizeErrorMessage(error));
             setIsCreating(false);
         }
     }, [token, tCanStart, mSelectedSubject, mTopicInput]);
@@ -198,9 +300,37 @@ function ChatPageInner()
         }
     }, [tCanStart, handleStartSession]);
 
+    // --- Loading existing session: spinner overlay ---
+    // 세션 재개 진입 시 detail API 응답 전까지 "새 대화 시작" 카드가
+    // 플래시로 보이지 않도록 전용 로딩 뷰를 먼저 렌더한다.
+    if (mIsLoadingSession)
+    {
+        return (
+            <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-gradient-to-b from-gray-50 to-indigo-50/30">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+                    <p className="text-sm font-medium text-gray-700">{SESSION_LOADING_TITLE}</p>
+                    <p className="text-xs text-gray-500">{SESSION_LOADING_SUBTITLE}</p>
+                </div>
+            </div>
+        );
+    }
+
     // --- Session active: render chat interface ---
     if (mSessionId !== null)
     {
+        // 재개 시 props: DB의 이전 메시지/분석/단계/턴 카운트를 ChatInterface 에 주입
+        const tInitialMessages = mLoadedDetail
+            ? convertDetailMessagesToChatMessages(mLoadedDetail.messages)
+            : undefined;
+        const tInitialAnalysis = mLoadedDetail
+            ? getLastAssistantAnalysis(mLoadedDetail.messages)
+            : undefined;
+        const tInitialStage = mLoadedDetail
+            ? getLastStageFromAnalyses(mLoadedDetail.messages)
+            : undefined;
+        const tInitialTurnCount = mLoadedDetail?.totalTurns;
+
         return (
             <div className="h-[calc(100vh-4rem)]">
                 <ChatInterface
@@ -209,6 +339,10 @@ function ChatPageInner()
                     topic={mTopicInput}
                     isGuest={tIsGuest}
                     isDemo={tIsDemo}
+                    initialMessages={tInitialMessages}
+                    initialAnalysis={tInitialAnalysis}
+                    initialStage={tInitialStage}
+                    initialTurnCount={tInitialTurnCount}
                 />
             </div>
         );

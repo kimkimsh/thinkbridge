@@ -33,7 +33,7 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ThoughtPanel } from "@/components/chat/ThoughtPanel";
 import { streamMessages, endSession } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { GUEST_MAX_TURNS, SUBJECT_LABELS, clampSocraticStage } from "@/lib/constants";
+import { DEFAULT_SOCRATIC_STAGE, GUEST_MAX_TURNS, SUBJECT_LABELS, clampSocraticStage } from "@/lib/constants";
 import type { ThoughtAnalysis } from "@/types";
 
 
@@ -41,9 +41,6 @@ import type { ThoughtAnalysis } from "@/types";
 
 /** Prefix added to hint request messages */
 const HINT_REQUEST_PREFIX = "[힌트 요청] ";
-
-/** Default Socratic stage at conversation start */
-const DEFAULT_STAGE = 1;
 
 /** Maximum stage value (for display/report button logic) */
 const REPORT_ELIGIBLE_STAGE = 5;
@@ -71,6 +68,19 @@ const WELCOME_TIPS = [
 ];
 
 
+// --- Message Type ---
+
+/**
+ * 채팅 UI에서 렌더링할 메시지 단위.
+ * 세션 재개 시 외부(page.tsx)에서 DB 메시지를 변환하여 주입하므로 export 한다.
+ */
+export interface ChatMessage
+{
+    role: "user" | "assistant";
+    content: string;
+}
+
+
 // --- Props ---
 
 interface ChatInterfaceProps
@@ -80,30 +90,50 @@ interface ChatInterfaceProps
     topic?: string;
     isGuest?: boolean;
     isDemo?: boolean;
-}
-
-
-// --- Message Type ---
-
-interface ChatMessage
-{
-    role: "user" | "assistant";
-    content: string;
+    /**
+     * 세션 재개 시 이전 메시지 기록 (선택).
+     * 제공되면 Welcome 카드 대신 기존 대화가 복원된다.
+     */
+    initialMessages?: ChatMessage[];
+    /**
+     * 세션 재개 시 마지막 assistant 턴의 분석 스냅샷 (선택).
+     */
+    initialAnalysis?: ThoughtAnalysis | null;
+    /**
+     * 세션 재개 시 복원할 소크라테스 단계 (선택, 기본 1).
+     */
+    initialStage?: number;
+    /**
+     * 세션 재개 시 복원할 누적 턴 카운트 (선택, 기본 0).
+     * Guest 턴 제한 UI와 동기화된다.
+     */
+    initialTurnCount?: number;
 }
 
 
 // --- Component ---
 
-export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: ChatInterfaceProps)
+export function ChatInterface({
+    sessionId,
+    subject,
+    topic,
+    isGuest,
+    isDemo,
+    initialMessages,
+    initialAnalysis,
+    initialStage,
+    initialTurnCount,
+}: ChatInterfaceProps)
 {
     // --- State ---
-    const [mMessages, setMessages] = useState<ChatMessage[]>([]);
-    const [mCurrentAnalysis, setCurrentAnalysis] = useState<ThoughtAnalysis | null>(null);
-    const [mCurrentStage, setCurrentStage] = useState(DEFAULT_STAGE);
+    // 세션 재개 시 props로 초기값을 seed 한다. 제공되지 않으면 빈 상태로 새 대화 시작.
+    const [mMessages, setMessages] = useState<ChatMessage[]>(initialMessages ?? []);
+    const [mCurrentAnalysis, setCurrentAnalysis] = useState<ThoughtAnalysis | null>(initialAnalysis ?? null);
+    const [mCurrentStage, setCurrentStage] = useState<number>(initialStage ?? DEFAULT_SOCRATIC_STAGE);
     const [mIsStreaming, setIsStreaming] = useState(false);
     const [mStreamingText, setStreamingText] = useState("");
     const [mInputValue, setInputValue] = useState("");
-    const [mTurnCount, setTurnCount] = useState(0);
+    const [mTurnCount, setTurnCount] = useState<number>(initialTurnCount ?? 0);
     const [mErrorMessage, setErrorMessage] = useState<string | null>(null);
     const [mIsEnding, setIsEnding] = useState(false);
     const [mIsSessionEnded, setIsSessionEnded] = useState(false);
@@ -493,8 +523,8 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
                         className="flex-1 overflow-y-auto p-4"
                     >
                         <div className="mx-auto max-w-2xl space-y-4">
-                            {/* Welcome message */}
-                            {mMessages.length === 0 && !mIsStreaming && (
+                            {/* Welcome message (숨김: 세션 재개 진입인 경우 initialMessages가 주어지므로 표시하지 않는다) */}
+                            {mMessages.length === 0 && !mIsStreaming && !initialMessages && (
                                 <div className="flex items-center justify-center py-8 sm:py-12">
                                     <div className="w-full max-w-sm rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
                                         {/* Header with icon */}

@@ -47,7 +47,7 @@ export const STAGE_LABELS: string[] = [
 export const TOTAL_STAGES = 5;
 
 /** Default Socratic stage when value is missing/invalid */
-const DEFAULT_SOCRATIC_STAGE = 1;
+export const DEFAULT_SOCRATIC_STAGE = 1;
 
 /** Minimum valid Socratic stage (matches STAGE_LABELS[0]) */
 const MIN_SOCRATIC_STAGE = 1;
