@@ -11,6 +11,8 @@ import { useAuth } from "@/lib/auth";
 import { getAdminStats, getAdminClasses, getAdminSubjects } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { TutorialButton } from "@/components/tutorial/TutorialButton";
+import { useAutoStartTutorial } from "@/lib/tutorial";
 import {
     Users,
     BookOpen,
@@ -192,6 +194,9 @@ export default function AdminDashboardPage()
     const [mIsLoading, setIsLoading] = useState(true);
     const [mError, setError] = useState<string | null>(null);
 
+    // 튜토리얼 자동 실행: 통계 로드 완료 시점에서 트리거.
+    useAutoStartTutorial("admin", !mIsLoading && !!mStats);
+
     /**
      * 전체 데이터 로드 - 3개 API 병렬 호출
      */
@@ -255,13 +260,19 @@ export default function AdminDashboardPage()
 
     return (
         <div className="space-y-6 p-4 sm:p-6">
-            {/* 페이지 제목 */}
-            <h1 className="text-xl font-bold text-gray-900">
-                {PAGE_TITLE}
-            </h1>
+            {/* 페이지 제목 + 튜토리얼 버튼 */}
+            <div className="flex items-center justify-between">
+                <h1 className="text-xl font-bold text-gray-900">
+                    {PAGE_TITLE}
+                </h1>
+                <TutorialButton tutorialId="admin" />
+            </div>
 
             {/* Demo Data 배너 */}
-            <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+            <div
+                data-tutorial-id="admin-demo-banner"
+                className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3"
+            >
                 <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
                 <p className="text-sm text-amber-800">
                     {DEMO_BANNER_TEXT}
@@ -286,7 +297,10 @@ export default function AdminDashboardPage()
 
             {/* 요약 카드 4개 */}
             {mStats && (
-                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <div
+                    data-tutorial-id="admin-stats-cards"
+                    className="grid grid-cols-2 gap-4 lg:grid-cols-4"
+                >
                     {STAT_CARDS.map((metric) =>
                     {
                         const IconComponent = metric.icon;
@@ -318,7 +332,7 @@ export default function AdminDashboardPage()
 
             {/* 반별 사고력 비교 BarChart */}
             {tBarChartData.length > 0 && (
-                <Card>
+                <Card data-tutorial-id="admin-bar-chart">
                     <CardContent className="p-4 sm:p-6">
                         <h2 className="mb-4 text-lg font-semibold text-gray-900">
                             {BAR_CHART_TITLE}
@@ -360,7 +374,7 @@ export default function AdminDashboardPage()
 
             {/* 과목별 6차원 레이더 */}
             {tRadarData.length > 0 && mSubjects.length > 0 && (
-                <Card>
+                <Card data-tutorial-id="admin-radar-chart">
                     <CardContent className="p-6">
                         <h2 className="mb-4 text-lg font-semibold text-gray-900">
                             {RADAR_CHART_TITLE}

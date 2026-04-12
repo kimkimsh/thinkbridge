@@ -13,8 +13,10 @@ import { ClassSelector } from "@/components/dashboard/ClassSelector";
 import { SummaryCards } from "@/components/dashboard/SummaryCards";
 import { HeatmapChart } from "@/components/dashboard/HeatmapChart";
 import { StudentList } from "@/components/dashboard/StudentList";
+import { TutorialButton } from "@/components/tutorial/TutorialButton";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
+import { useAutoStartTutorial } from "@/lib/tutorial";
 import type { ClassSummary, StudentSummary, HeatmapResponse } from "@/types";
 
 
@@ -40,6 +42,9 @@ export default function InstructorDashboardPage()
     const [mIsLoadingClasses, setIsLoadingClasses] = useState(true);
     const [mIsLoadingData, setIsLoadingData] = useState(false);
     const [mError, setError] = useState<string | null>(null);
+
+    // 튜토리얼 자동 실행: 히트맵 데이터 로드 완료 시점에서 트리거 (모든 단계의 타깃이 렌더되는 시점).
+    useAutoStartTutorial("instructor", !mIsLoadingData && !!mHeatmap);
 
     /**
      * 반 목록 로드 - 마운트 시 1회 실행, 첫 번째 반 자동 선택
@@ -167,17 +172,22 @@ export default function InstructorDashboardPage()
 
     return (
         <div className="space-y-6 p-6">
-            {/* 페이지 제목 */}
-            <h1 className="text-xl font-bold text-gray-900">
-                {PAGE_TITLE}
-            </h1>
+            {/* 페이지 제목 + 튜토리얼 버튼 */}
+            <div className="flex items-center justify-between">
+                <h1 className="text-xl font-bold text-gray-900">
+                    {PAGE_TITLE}
+                </h1>
+                <TutorialButton tutorialId="instructor" />
+            </div>
 
             {/* 반 선택 드롭다운 */}
-            <ClassSelector
-                classes={mClasses}
-                selectedClassId={mSelectedClassId}
-                onSelect={handleClassSelect}
-            />
+            <div data-tutorial-id="instructor-class-selector">
+                <ClassSelector
+                    classes={mClasses}
+                    selectedClassId={mSelectedClassId}
+                    onSelect={handleClassSelect}
+                />
+            </div>
 
             {/* 에러 메시지 */}
             {mError && (
@@ -237,15 +247,21 @@ export default function InstructorDashboardPage()
             {!mIsLoadingData && mSelectedClassId !== null && (
                 <>
                     {/* 요약 카드 */}
-                    <SummaryCards students={mStudents} />
+                    <div data-tutorial-id="instructor-summary-cards">
+                        <SummaryCards students={mStudents} />
+                    </div>
 
                     {/* 사고력 히트맵 */}
                     {mHeatmap && (
-                        <HeatmapChart data={mHeatmap} />
+                        <div data-tutorial-id="instructor-heatmap">
+                            <HeatmapChart data={mHeatmap} />
+                        </div>
                     )}
 
                     {/* 학생 목록 */}
-                    <StudentList students={mStudents} />
+                    <div data-tutorial-id="instructor-student-list">
+                        <StudentList students={mStudents} />
+                    </div>
                 </>
             )}
 

@@ -15,9 +15,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChatInterface, type ChatMessage } from "@/components/chat/ChatInterface";
+import { TutorialButton } from "@/components/tutorial/TutorialButton";
 import { useAuth } from "@/lib/auth";
 import { createSession, getSessionDetail, normalizeErrorMessage } from "@/lib/api";
 import { SUBJECT_LABELS, GUEST_MAX_TURNS, DEFAULT_SOCRATIC_STAGE } from "@/lib/constants";
+import { useAutoStartTutorial } from "@/lib/tutorial";
 import type { SessionDetail, MessageWithAnalysis, ThoughtAnalysis } from "@/types";
 
 
@@ -190,6 +192,11 @@ function ChatPageInner()
     const tIsDemo = searchParams.get("demo") === "true";
     const tCanStart = mTopicInput.trim().length > 0 && !mIsCreating;
 
+    // 튜토리얼 자동 실행: 세션 로딩이 끝나면 시작한다.
+    // pre-session / in-session 양쪽 상태 모두 커버되며, 이후 단계는 overlay 의
+    // waitForTarget 이 timeout 되면 center fallback 으로 표시된다.
+    useAutoStartTutorial("chat", !mIsLoadingSession);
+
     /**
      * sessionId 쿼리 파라미터 감지 시 해당 세션을 불러와 메시지/분석/턴 카운트를 복원한다.
      *
@@ -352,7 +359,11 @@ function ChatPageInner()
     return (
         <div className="flex h-[calc(100vh-4rem)] items-center justify-center bg-gradient-to-b from-gray-50 to-indigo-50/30 p-4">
             <Card className="w-full max-w-lg border-indigo-100 shadow-lg shadow-indigo-100/30">
-                <CardHeader className="text-center pb-4">
+                <CardHeader className="text-center pb-4 relative">
+                    {/* Tutorial replay button (top-right of card header) */}
+                    <div className="absolute right-2 top-2">
+                        <TutorialButton tutorialId="chat" />
+                    </div>
                     <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-200/50">
                         <Sparkles className="h-7 w-7 text-white" />
                     </div>
@@ -382,7 +393,7 @@ function ChatPageInner()
                         <label className="text-sm font-semibold text-gray-700">
                             과목 선택
                         </label>
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-3 gap-3" data-tutorial-id="chat-subject-selector">
                             {SUBJECT_OPTIONS.map((option) =>
                             {
                                 const tIsSelected = mSelectedSubject === option.key;
@@ -434,6 +445,7 @@ function ChatPageInner()
                             주제 입력
                         </label>
                         <Input
+                            data-tutorial-id="chat-topic-input"
                             value={mTopicInput}
                             onChange={(e) => setTopicInput(e.target.value)}
                             onKeyDown={handleTopicKeyDown}
@@ -452,6 +464,7 @@ function ChatPageInner()
 
                     {/* Start button */}
                     <Button
+                        data-tutorial-id="chat-start-button"
                         className={`
                             w-full shadow-md transition-all duration-200
                             ${tCanStart

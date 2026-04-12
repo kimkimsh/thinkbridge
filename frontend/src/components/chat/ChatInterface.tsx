@@ -503,7 +503,10 @@ export function ChatInterface({
     return (
         <div className="flex h-full flex-col bg-gray-50/50">
             {/* Progress bar */}
-            <div className="shrink-0 border-b border-indigo-100/50 bg-white p-3">
+            <div
+                data-tutorial-id="chat-progress-bar"
+                className="shrink-0 border-b border-indigo-100/50 bg-white p-3"
+            >
                 <div className="mb-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-xs text-indigo-700">
@@ -700,6 +703,7 @@ export function ChatInterface({
                                 <div className="flex shrink-0 items-center gap-1.5 pb-0.5">
                                     {/* Hint button */}
                                     <Button
+                                        data-tutorial-id="chat-hint-button"
                                         variant="ghost"
                                         size="sm"
                                         onClick={handleHintRequest}
@@ -725,6 +729,7 @@ export function ChatInterface({
                                         so 3-state discernibility is unambiguous (기존 ghost variant는 경계선이 약해
                                         활성/비활성 구분이 어려웠던 UX 이슈 대응). */}
                                     <Button
+                                        data-tutorial-id="chat-end-button"
                                         variant="outline"
                                         size="sm"
                                         onClick={handleEndSession}
@@ -750,7 +755,10 @@ export function ChatInterface({
                 </div>
 
                 {/* Analysis panel (desktop sidebar) */}
-                <div className="hidden w-72 shrink-0 border-l border-indigo-100/50 bg-gradient-to-b from-gray-50 to-indigo-50/20 p-3 lg:block xl:w-80">
+                <div
+                    data-tutorial-id="chat-thought-panel"
+                    className="hidden w-72 shrink-0 border-l border-indigo-100/50 bg-gradient-to-b from-gray-50 to-indigo-50/20 p-3 lg:block xl:w-80"
+                >
                     <ThoughtPanel
                         analysis={mCurrentAnalysis}
                         isDemo={isDemo}

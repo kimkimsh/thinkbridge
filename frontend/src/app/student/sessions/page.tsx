@@ -22,9 +22,11 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { TutorialButton } from "@/components/tutorial/TutorialButton";
 import { useAuth } from "@/lib/auth";
 import { getSessions } from "@/lib/api";
 import { SUBJECT_LABELS } from "@/lib/constants";
+import { useAutoStartTutorial } from "@/lib/tutorial";
 import type { TutoringSession } from "@/types";
 
 
@@ -105,9 +107,13 @@ interface SessionCardProps
 {
     session: TutoringSession;
     onClick: () => void;
+    /** True when this card is the first entry in the list (튜토리얼 타깃). */
+    isFirst?: boolean;
+    /** True when this completed-status card is the first completed entry (리포트 CTA 튜토리얼 타깃). */
+    isFirstCompleted?: boolean;
 }
 
-function SessionCard({ session, onClick }: SessionCardProps)
+function SessionCard({ session, onClick, isFirst, isFirstCompleted }: SessionCardProps)
 {
     const IconComponent = SUBJECT_ICONS[session.subject] ?? BookOpen;
     const tStatus = STATUS_CONFIG[session.status] ?? DEFAULT_STATUS_CONFIG;
@@ -115,6 +121,7 @@ function SessionCard({ session, onClick }: SessionCardProps)
 
     return (
         <Card
+            data-tutorial-id={isFirst ? "sessions-card-first" : undefined}
             className="cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-200"
             onClick={onClick}
         >
@@ -152,7 +159,12 @@ function SessionCard({ session, onClick }: SessionCardProps)
 
                     {/* 완료된 세션은 리포트 CTA를 명시적으로 노출 — 클릭 시 카드 onClick으로 버블링되어 동일 리포트 페이지로 이동 */}
                     {session.status === "completed" && (
-                        <Button size="sm" variant="outline" className="shrink-0">
+                        <Button
+                            data-tutorial-id={isFirstCompleted ? "sessions-report-cta" : undefined}
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0"
+                        >
                             <FileText className="mr-1 h-3 w-3" />
                             {REPORT_CTA_LABEL}
                         </Button>
@@ -177,6 +189,9 @@ export default function StudentSessionsPage()
 
     const { token } = useAuth();
     const router = useRouter();
+
+    // 튜토리얼 자동 실행: 세션 목록 로드가 완료되고 최소 1개 이상 있어야 카드 기반 단계가 의미 있음.
+    useAutoStartTutorial("sessions", !mIsLoading && mSessions.length > 0);
 
     // 세션 목록 로드
     useEffect(() =>
@@ -238,6 +253,9 @@ export default function StudentSessionsPage()
         }
     }
 
+    // 첫 번째 완료 세션의 id — 리포트 CTA 튜토리얼 타깃 marking 용
+    const tFirstCompletedId = mSessions.find((s) => s.status === "completed")?.id ?? null;
+
     return (
         <div className="mx-auto max-w-2xl p-4 sm:p-6">
             {/* Header */}
@@ -245,13 +263,17 @@ export default function StudentSessionsPage()
                 <h1 className="text-xl font-bold text-gray-900">
                     {PAGE_TITLE}
                 </h1>
-                <Button
-                    size="sm"
-                    onClick={() => router.push("/student/chat")}
-                >
-                    <Plus className="mr-1 h-4 w-4" />
-                    {NEW_CHAT_LABEL}
-                </Button>
+                <div className="flex items-center gap-2">
+                    <TutorialButton tutorialId="sessions" />
+                    <Button
+                        data-tutorial-id="sessions-new-chat"
+                        size="sm"
+                        onClick={() => router.push("/student/chat")}
+                    >
+                        <Plus className="mr-1 h-4 w-4" />
+                        {NEW_CHAT_LABEL}
+                    </Button>
+                </div>
             </div>
 
             {/* Loading state */}
@@ -289,11 +311,13 @@ export default function StudentSessionsPage()
             {/* Session list */}
             {!mIsLoading && !mError && mSessions.length > 0 && (
                 <div className="space-y-3">
-                    {mSessions.map((session) => (
+                    {mSessions.map((session, index) => (
                         <SessionCard
                             key={session.id}
                             session={session}
                             onClick={() => handleSessionClick(session)}
+                            isFirst={index === 0}
+                            isFirstCompleted={session.id === tFirstCompletedId}
                         />
                     ))}
                 </div>
