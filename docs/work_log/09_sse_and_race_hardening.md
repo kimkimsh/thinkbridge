@@ -54,6 +54,39 @@
 - `python -m py_compile app/routers/sessions.py`: exit 0.
 - `from app.routers.sessions import router; len(router.routes)`: 5.
 
+### 프로덕션 smoke test (post-deploy)
+
+- **Push timestamp**: 2026-04-12 16:14:57 +0900 (commit `ba5ebdf`).
+- **Backend `/health`**: `HTTP=200 time=0.61s` (Render 정상).
+- **Frontend `/`**: `HTTP=200 time=0.77s bytes=34130` (Vercel 정상).
+- **Race 재현 스크립트 (2회 실행)**:
+  - Run 1: `200: 6, 403: 0, raw: [200, 200, 200, 200, 200, 200]` → `AssertionError: Expected 5 successes, got 6` → EXIT=1
+  - Run 2: `200: 6, 403: 0, raw: [200, 200, 200, 200, 200, 200]` → EXIT=1
+  - 보조 검증:
+    - 순차 메시지 7회 전송 → 5×200 + 2×403 (순차 경로에서는 제한 정상 작동).
+    - 2개 동시 전송 → 둘 다 200 (~11s씩), 병렬로 처리됨 → **락이 직렬화하지 않는다는 결정적 증거**.
+- **E2E 비회귀**: 24/24 PASS (47.4s baseline과 동일). SSE 최종 flush 경로 미포함이라 Fix #3은 수동 검증 필요.
+- **종합 판정**: **FAIL — Fix #5가 프로덕션에서 동작하지 않음 (BLOCKER)**. Fix #3(SSE flush)은 이 스크립트로 검증되지 않음.
+
+### BLOCKER 분석 (Fix #5 프로덕션 미작동)
+
+**증상**: 동시 POST 6건 → 6×200 (락이 serialize하지 않음). 순차 경로(5×200 + 2×403)는 정상.
+
+**배제된 원인**:
+- Render 미배포: commit 시각 기준 ≥45분 경과, `/health` 응답으로 최신 코드 확인.
+- guest 플래그 미설정: `/api/auth/guest` 응답에 `isGuest:true` 확인.
+- `>= 5` 체크 로직 오류: 순차 테스트에서 6번째 요청이 403 반환 확인.
+
+**유력한 근본 원인 후보** (확정 전 추가 조사 필요):
+1. **Supabase Session mode pooler의 `FOR UPDATE` 미지원 가능성**: pgbouncer Session mode는 이론상 유지하지만 실제 서버 설정에 따라 다를 수 있음.
+2. **SQLAlchemy 2.0 async `autobegin` + NullPool 조합에서 각 `db.execute()`가 별도 트랜잭션으로 분리되어 lock이 statement-level에만 적용**. `async with db.begin(): ...` 블록으로 감싸야 commit까지 락이 유지될 수 있음.
+3. **asyncpg 드라이버의 `FOR UPDATE` 구문이 statement_cache_size=0 환경에서 다르게 처리될 가능성**.
+
+**다음 단계 제안** (다음 세션에서):
+- `sendMessage` 본문을 `async with db.begin():` 으로 감싸 명시적 트랜잭션 경계 확보.
+- 혹은 `UPDATE ... WHERE mTotalTurns < 5` 방식의 낙관적 증분(row-level CAS)으로 설계 변경.
+- 로컬 Postgres(non-pooler)에서 동일 재현 후 pooler vs direct 비교.
+
 ## 검증 에이전트 기록 (총 9회 독립 리뷰)
 
 ### Spec 설계 단계 (6회)
