@@ -255,9 +255,15 @@ function parseSSEBuffer(buffer: string): ParsedSSEResult
                 tEvents.push({ type: "error", data: tParsedData });
             }
         }
-        catch
+        catch (tParseError)
         {
-            // JSON 파싱 실패 시 해당 이벤트 무시
+            // JSON 파싱 실패는 더 이상 조용히 삼키지 않는다 — 운영 중 이벤트 드롭 원인 파악을 위해 경고 로그.
+            // data 미리보기는 ERROR_BODY_PREVIEW_MAX_LENGTH 로 잘라 큰 페이로드로 콘솔이 오염되지 않도록 방어.
+            console.warn("SSE event JSON parse failed", {
+                eventType: tEventType,
+                dataPreview: tDataStr.slice(0, ERROR_BODY_PREVIEW_MAX_LENGTH),
+                error: tParseError instanceof Error ? tParseError.message : String(tParseError),
+            });
         }
     }
 
