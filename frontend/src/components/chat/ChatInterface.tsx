@@ -33,7 +33,7 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ThoughtPanel } from "@/components/chat/ThoughtPanel";
 import { streamMessages, endSession } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { GUEST_MAX_TURNS, SUBJECT_LABELS } from "@/lib/constants";
+import { GUEST_MAX_TURNS, SUBJECT_LABELS, clampSocraticStage } from "@/lib/constants";
 import type { ThoughtAnalysis } from "@/types";
 
 
@@ -307,7 +307,8 @@ export function ChatInterface({ sessionId, subject, topic, isGuest, isDemo }: Ch
                 {
                     // Update analysis panel and stage
                     setCurrentAnalysis(tEvent.data);
-                    setCurrentStage(tEvent.data.socraticStage);
+                    // 백엔드 응답이 예상 범위([1,5])를 벗어나는 경우를 대비해 방어적으로 클램프
+                    setCurrentStage(clampSocraticStage(tEvent.data.socraticStage));
                 }
                 else if (tEvent.type === "done")
                 {

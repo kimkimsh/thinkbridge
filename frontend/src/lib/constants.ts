@@ -46,6 +46,32 @@ export const STAGE_LABELS: string[] = [
 /** Total number of Socratic stages */
 export const TOTAL_STAGES = 5;
 
+/** Default Socratic stage when value is missing/invalid */
+const DEFAULT_SOCRATIC_STAGE = 1;
+
+/** Minimum valid Socratic stage (matches STAGE_LABELS[0]) */
+const MIN_SOCRATIC_STAGE = 1;
+
+/** Maximum valid Socratic stage (matches STAGE_LABELS.length) */
+const MAX_SOCRATIC_STAGE = 5;
+
+/**
+ * Clamp a socraticStage value into the valid [1, 5] range.
+ * Defensive helper used before indexing into STAGE_LABELS or
+ * passing to components that assume a valid stage number.
+ *
+ * 백엔드/AI 응답이 예상 범위를 벗어나는 경우(null, NaN, 0, 6+)에도
+ * UI가 깨지지 않도록 안전하게 클램프한다.
+ */
+export function clampSocraticStage(stage: number | undefined | null): number
+{
+    if (typeof stage !== "number" || isNaN(stage))
+    {
+        return DEFAULT_SOCRATIC_STAGE;
+    }
+    return Math.max(MIN_SOCRATIC_STAGE, Math.min(MAX_SOCRATIC_STAGE, Math.floor(stage)));
+}
+
 
 // --- Subject Labels ---
 

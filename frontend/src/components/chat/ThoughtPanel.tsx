@@ -18,6 +18,7 @@ import {
     STAGE_LABELS,
     MAX_DIMENSION_SCORE,
     TOTAL_STAGES,
+    clampSocraticStage,
 } from "@/lib/constants";
 import type { ThoughtAnalysis } from "@/types";
 
@@ -91,6 +92,11 @@ export function ThoughtPanel({ analysis, isDemo }: ThoughtPanelProps)
         }
     }
     const tAverageScore = tScoreCount > 0 ? (tTotalScore / tScoreCount) : 0;
+
+    // 소크라테스 단계 값을 [1, 5] 범위로 방어적 클램프 후 STAGE_LABELS 인덱싱
+    const tSafeStage = clampSocraticStage(analysis.socraticStage);
+    const tStageIndex = tSafeStage - 1;
+    const tStageLabel = STAGE_LABELS[tStageIndex];
 
     return (
         <Card className="overflow-hidden border-indigo-100 shadow-sm">
@@ -181,16 +187,16 @@ export function ThoughtPanel({ analysis, isDemo }: ThoughtPanelProps)
                                 소크라테스 단계
                             </span>
                             <span className="text-xs font-bold text-indigo-600">
-                                {analysis.socraticStage}/{TOTAL_STAGES}
+                                {tSafeStage}/{TOTAL_STAGES}
                             </span>
                         </div>
                         <div className="flex items-center gap-1">
                             {STAGE_LABELS.map((label, index) =>
                             {
                                 const tStageNum = index + 1;
-                                const tIsPast = tStageNum < analysis.socraticStage;
-                                const tIsActive = tStageNum === analysis.socraticStage;
-                                const tIsFuture = tStageNum > analysis.socraticStage;
+                                const tIsPast = tStageNum < tSafeStage;
+                                const tIsActive = tStageNum === tSafeStage;
+                                const tIsFuture = tStageNum > tSafeStage;
 
                                 return (
                                     <div key={tStageNum} className="flex items-center gap-1">
@@ -217,7 +223,7 @@ export function ThoughtPanel({ analysis, isDemo }: ThoughtPanelProps)
                                         {tStageNum < TOTAL_STAGES && (
                                             <div
                                                 className={`h-0.5 w-2 rounded-full ${
-                                                    tStageNum < analysis.socraticStage ? "bg-indigo-300" : "bg-gray-200"
+                                                    tStageNum < tSafeStage ? "bg-indigo-300" : "bg-gray-200"
                                                 }`}
                                             />
                                         )}
@@ -227,7 +233,7 @@ export function ThoughtPanel({ analysis, isDemo }: ThoughtPanelProps)
                         </div>
                         {/* Active stage label */}
                         <p className="mt-1.5 text-[11px] text-indigo-600">
-                            현재: <span className="font-bold">{STAGE_LABELS[analysis.socraticStage - 1]}</span> 단계
+                            현재: <span className="font-bold">{tStageLabel}</span> 단계
                         </p>
                     </div>
 
