@@ -667,6 +667,21 @@ async def _saveAiResponseToDb(
 
     async with async_session_maker() as tDb:
         try:
+            # 중복 INSERT 방지 — 재시도/레이스로 인해 동일 (session, turn, ASSISTANT) 메시지가
+            # 이미 저장된 경우 조기 반환하여 UNIQUE 제약 위반 및 ThoughtAnalysis 중복을 차단
+            tExistingCheck = await tDb.execute(
+                select(Message.mId)
+                .where(Message.mSessionId == sessionId)
+                .where(Message.mTurnNumber == turnNumber)
+                .where(Message.mRole == MessageRole.ASSISTANT)
+            )
+            if tExistingCheck.scalar_one_or_none() is not None:
+                logger.warning(
+                    "Assistant message already exists for session %d turn %d; skipping duplicate INSERT",
+                    sessionId, turnNumber,
+                )
+                return
+
             # AI 어시스턴트 메시지 저장
             tAiMessage = Message()
             tAiMessage.mSessionId = sessionId
