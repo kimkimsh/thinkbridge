@@ -6,10 +6,12 @@ POST /sessions/{id}/messages is the most critical endpoint -- it streams
 Socratic responses via SSE while capturing 6-dimension thought analysis.
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
 
+import anthropic
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,6 +83,14 @@ MESSAGE_CONTENT_TOO_LONG_DETAIL = f"메시지는 {MAX_MESSAGE_CONTENT_LENGTH}자
 # DB 저장 실패 시 클라이언트 알림 (done 이후 error 이벤트로 전송)
 DB_SAVE_FAILED_MESSAGE = "응답을 저장하지 못했습니다. 페이지를 새로고침해주세요."
 DB_SAVE_FAILED_CODE = "DB_SAVE_FAILED"
+
+# SSE 스트리밍 중 예외 분기별 사용자 메시지/코드
+# anthropic.APIError (SDK base exception)과 그 외 예기치 못한 Exception을 구분하여
+# 운영자가 로그로 원인을 빠르게 파악할 수 있도록 함.
+AI_API_ERROR_MESSAGE = "AI 서비스 일시 오류입니다. 잠시 후 다시 시도해주세요."
+AI_API_ERROR_CODE = "AI_API_ERROR"
+STREAM_UNEXPECTED_MESSAGE = "스트리밍 중 예상치 못한 오류가 발생했습니다."
+STREAM_UNEXPECTED_CODE = "STREAM_UNEXPECTED"
 
 # AI 엔진 분석 결과 snake_case → ThoughtAnalysis 모델 mPascalCase 매핑
 ANALYSIS_FIELD_MAPPING = {
@@ -549,14 +559,36 @@ async def sendMessage(
                         "data": json.dumps(tEventData, ensure_ascii=False),
                     }
 
-        except Exception as tError:
-            # 예기치 않은 스트리밍 오류 처리
-            logger.error("Unexpected streaming error for session %d: %s", tSessionId, tError)
+        except asyncio.CancelledError:
+            # Python 3.8+ BaseException subclass — 현재도 except Exception에 포착 안 되나
+            # 명시적 처리로 의도 표현 + 향후 refactor 방어.
+            logger.info("Client disconnected during streaming for session %d", tSessionId)
+            raise
+        except anthropic.APIError as tApiError:
+            # Anthropic SDK 레벨 에러 (타임아웃, 5xx, 429 등) — logger.exception으로 traceback 기록
+            logger.exception("Anthropic API error during streaming for session %d", tSessionId)
             tHasError = True
             yield {
                 "event": EVENT_TYPE_ERROR,
                 "data": json.dumps(
-                    {"message": "스트리밍 중 오류가 발생했습니다."},
+                    {
+                        "message": AI_API_ERROR_MESSAGE,
+                        "code": AI_API_ERROR_CODE,
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+        except Exception as tError:
+            # 예기치 않은 스트리밍 오류 — traceback 전체 기록 (logger.exception)
+            logger.exception("Unexpected streaming error for session %d", tSessionId)
+            tHasError = True
+            yield {
+                "event": EVENT_TYPE_ERROR,
+                "data": json.dumps(
+                    {
+                        "message": STREAM_UNEXPECTED_MESSAGE,
+                        "code": STREAM_UNEXPECTED_CODE,
+                    },
                     ensure_ascii=False,
                 ),
             }
