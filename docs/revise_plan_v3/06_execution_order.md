@@ -3,22 +3,25 @@
 > 밤샘 안정화 작업용. 시간 예산 기반 우선순위.
 > 각 phase는 독립 검증 가능하며 중단해도 상태 일관성 유지.
 
-## Time Budget
+## Time Budget (검증 정정 — 2026-04-12)
 
-- **총 예상 시간**: 6-10시간 (여유 포함)
-- **Commit 수**: ~12-15개 (각 독립 revert 가능)
+- **총 예상 시간**: **9-12시간** (원안 6-10h는 실측 대비 낙관. 오늘 오후 Fix #3+#5+CAS 재작업 실측 ~4h 기반 조정)
+- **Commit 수**: ~12-15개 (**LIFO 순서 revert 가능** — 같은 파일 stacked commit은 개별 중간 revert 시 conflict 주의)
 - **검증 지점**: 4개 (phase 경계마다 `test_guest_race.py` + E2E)
+- **Subagent overhead**: per-task ~15-20분 (implementer + spec + quality review) — phase 예산에 반영됨
 
-## Phase 구성
+## Phase 구성 (재조정)
 
 ```
 Phase 0 (준비):       ~20분
-Phase 1 (P0 Critical): ~2시간  — 코드 변경 S~M, 검증 집중
-Phase 2 (P1 High):     ~3시간  — 안정성 강화
-Phase 3 (P2 선별):     ~1.5시간 — 방어적 구조 개선
-Phase 4 (Docs drift):  ~1시간  — 문서 정확성 복구
-Phase 5 (검증·배포):    ~1시간  — 종합 회귀
-Phase 6 (Work log):    ~30분   — 10번 work log 작성
+Phase 1 (P0 Critical): ~3시간  — 원안 2h, 실측 대비 낙관이었음. P0-2 downstream 영향 검토 버퍼 포함
+Phase 2 (P1 High):     ~3.5시간 — 병렬 레인 활용 시 절감. subagent overhead 반영
+Phase 3 (P2 선별):     ~2시간  — P2-2의 프론트 retry 로직 연동 시간
+Phase 4 (Docs drift):  ~1시간  — 문서만
+Phase 5 (검증·배포):    ~1.5시간 — 프로덕션 verify 재시도 버퍼 (오늘 CAS rework 사례)
+Phase 6 (Work log):    ~30분
+─────────────────────
+합계:                  ~11시간 40분
 ```
 
 ---
@@ -398,22 +401,36 @@ Commit: `docs(work_log): add v3 stability hardening session log`
 
 | Phase | Revert 대상 | 명령어 |
 |-------|-----------|--------|
-| P0 (3 커밋) | 최신 3개 | `git revert HEAD~2..HEAD` |
+| P0 (3 커밋) | 최신 3개 | `git revert HEAD~3..HEAD` (**검증 정정: `HEAD~2..HEAD`는 2개만 포함**) |
 | P1 (~7 커밋) | 최신 ~7개 | `git revert <P1 시작>..<P1 끝>` |
 | P2 (~5 커밋) | 최신 ~5개 | `git revert <P2 시작>..<P2 끝>` |
 | Docs (~8 커밋) | 문서만이라 revert 간단 | 개별 revert |
 
-**주의**: P1-3 (fallback flag)은 DB 스키마 변경 포함이라 단순 revert로는 부족. Supabase에서 `ALTER TABLE ... DROP COLUMN` 별도 필요.
+**주의 1**: P1-3 (fallback flag)은 DB 스키마 변경 포함이라 단순 revert로는 부족. Supabase에서 `ALTER TABLE ... DROP COLUMN` 별도 필요. → 이 항목은 **Phase 2B로 격리** 권장 (아래 병렬 레인 참조).
 
-## 긴급 중단 지점
+**주의 2 (검증 정정)**: "각 commit 독립 revert 가능"은 **오도** — 같은 파일을 여러 commit이 수정하는 경우 conflict 가능. 실제 의미는 **"LIFO 순서 revert 가능"**:
+```
+ai_engine.py: P0-1, P1-4, P1-5 (3 commits stacked)
+sessions.py:  P0-2, P1-1, P1-6, P2-1, P2-2 (5 commits stacked)
+api.ts:       P0-3, P1-2, P1-7 (3 commits stacked)
+```
+중간 commit만 개별 revert하면 conflict 가능 — 이 경우 manual merge 또는 LIFO 전체 revert.
 
-다음 조건 발생 시 즉시 중단 + rollback:
-- `test_guest_race.py` FAIL (race 재발)
-- E2E 24/24 → 22/24 이하 regression
-- Production `/health` 타임아웃
-- 프론트 build 실패
+## 긴급 중단 지점 (검증 정정)
 
-## 의존성 지도
+다음 조건이 **2회 연속 재현** 되면 즉시 중단 + rollback (WAN flake / cold start 일시적 이슈 방어):
+- `test_guest_race.py` FAIL (race 재발) — **2회 연속만 신뢰**
+- E2E 24/24 → 22/24 이하 regression — 2회 연속
+- Production `/health` 타임아웃 — 2회 연속 (cold start 제외)
+- 프론트 build 실패 — 1회로 충분 (deterministic)
+
+**오탐 사례** (오늘 work_log/09에 기록):
+- 한국↔Supabase WAN 지연으로 `MESSAGE_TIMEOUT_SECONDS=90` 초과 → 500 → "FAIL"로 오분류
+- Render cold start 후 첫 POST가 여전히 cold path 해소 중
+
+**비용 관리**: `test_guest_race.py`는 실행당 Claude API 최소 6회 호출. Phase 1/2/3/5 경계 각 1회 × 4 phases = 24 API 호출/세션. Phase 재실행 시 6회 추가.
+
+## 의존성 지도 (검증 정정 — 누락 의존성 반영)
 
 ```
 P0-1 (anthropic 529) ──┐
@@ -422,19 +439,22 @@ P0-2 (save failure) ────┘
                         │
                         ▼
 P1-1 (guest compensation) ← depends on P0-2
-P1-4 (streaming retry) ← depends on P0-1
-P1-2 (AbortController) — independent
-P1-5/6 (exception) — independent
-P1-7 (parseSSEBuffer log) — independent
-P1-8 (guest login error) — independent
-P1-3 (fallback flag) — independent (스키마 변경 유의)
+P1-1                      ← depends on P1-3 [NEW: compensation 판단 기준 = fallback flag 존재?]
+P1-4 (streaming retry)    ← depends on P0-1
+P1-4                      ← depends on P1-3 [NEW: retry 성공 저장 시 fallback 플래그]
+P1-2 (AbortController) — frontend-only, 병렬 가능
+P1-6 (exception) — backend, independent
+P1-7 (parseSSEBuffer log) — frontend-only, 병렬 가능
+P1-8 (guest login error) — frontend-only, 병렬 가능
+P1-3 (fallback flag) — 독립이나 스키마 변경 → Phase 2B로 격리 권장
+P1-5 (processTurn) — DOC-9와 통합 (dead code 삭제)
                         │
                         ▼
-P2-3 (socraticStage) — independent
-P2-4 (global-error) — independent
-P2-5 (Suspense) — independent
-P2-1 (Message dup) ← depends on P0-2
-P2-2 (report race) — independent
+P2-3 (socraticStage) — frontend-only, 병렬 가능
+P2-4 (global-error) — frontend-only, 병렬 가능
+P2-5 (Suspense) — frontend-only, 병렬 가능
+P2-1 (Message dup)        ← depends on P0-2
+P2-2 (report race)        ← depends on P0-2 [NEW: 동일 에러 처리 패턴 간섭]
                         │
                         ▼
 DOC all — independent
@@ -442,6 +462,17 @@ DOC all — independent
                         ▼
 Work log
 ```
+
+### 병렬 레인 (Frontend-only, Phase 1/2/3 중 병렬 수행 가능)
+- P1-2 (AbortController) ∥ P1-7 (parseSSEBuffer log) ∥ P1-8 (guest login error)
+- P2-3 (socraticStage) ∥ P2-4 (global-error) ∥ P2-5 (Suspense)
+
+Backend implementer가 P0/P1 순차 진행 중, 별도 implementer에 위 frontend 항목 병렬 dispatch → wall-clock 30-40분 절감.
+
+### Phase 2B 격리 — P1-3 (DB 스키마)
+- 스키마 변경(ALTER TABLE) 포함 → 원자적 단위 보호
+- Phase 5 verify에서 별도 smoke (fallback flag 집계 제외 확인)
+- Rollback 시 `ALTER TABLE DROP COLUMN` 추가 단계 필요
 
 ## 중단 시 복구 포인트
 

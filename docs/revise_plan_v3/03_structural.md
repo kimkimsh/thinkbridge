@@ -55,7 +55,7 @@ class Message(Base):
 ## P2-2: `endSession` + `generateSessionReport` 분리된 트랜잭션 경계
 
 ### 위치
-`backend/app/routers/sessions.py:690-716` (endSession) + `backend/app/routers/reports.py:111-126` (lazy report gen)
+`backend/app/routers/sessions.py:650-717` (endSession, **검증 정정: Plan 초안 690-716은 40줄 drift**) + `backend/app/routers/reports.py:111-126` (lazy report gen)
 
 ### 현상
 - `endSession`에서 session status=completed 커밋 후 `generateSessionReport(sessionId, db=db)` 호출
@@ -119,7 +119,7 @@ await db.execute(tInsertStmt)
 ## P2-3: `socraticStage` 0/undefined 방어 부족 (Frontend)
 
 ### 위치
-`frontend/src/components/chat/ThoughtPanel.tsx:230` (`STAGE_LABELS[analysis.socraticStage - 1]`), `ChatInterface.tsx:286-288`, `ThoughtTimeline.tsx:141`
+`frontend/src/components/chat/ThoughtPanel.tsx:230` (`STAGE_LABELS[analysis.socraticStage - 1]`, raw — fallback 없음), `ChatInterface.tsx:287` (**검증 정정: 286-288 → 287 단일 라인, `setCurrentStage(tEvent.data.socraticStage)`**), `ThoughtTimeline.tsx:141` (이미 nullish-coalescing fallback 있음 — 이 파일은 수정 불필요)
 
 ### 현상
 - 백엔드 분석이 tool_use 못 부른 경우 (DEFAULT_ANALYSIS의 socratic_stage=1이라 괜찮지만) 또는 수동 SSE 테스트 등으로 0/null이 올 수 있음
@@ -162,10 +162,12 @@ const tStageLabel = STAGE_LABELS[tStageIndex];
 ### 위치
 `frontend/src/app/error.tsx`
 
-### 현상
-Next.js 14 App Router에서:
-- `app/error.tsx`: route segment 하위 에러만 포착. Root layout 에러 (e.g., `AuthProvider` init 실패) 놓침.
-- `app/global-error.tsx`: root 포함 모든 에러 포착. 단, `<html><body>` 래퍼 필요.
+### 현상 (검증 정정)
+`frontend/src/app/error.tsx`의 컴포넌트 이름은 이미 **`GlobalError`** (의도는 global)이지만, Next.js App Router는 **파일 경로**로 route 역할을 결정함. `app/error.tsx`는 여전히 root segment 수준만 포착, root layout 자체 에러는 놓침.
+
+Next.js 14 App Router 규칙:
+- `app/error.tsx`: route segment 하위 에러만 포착 (컴포넌트 이름 무관)
+- `app/global-error.tsx`: root layout 포함 모든 에러 포착. 단, `<html><body>` 래퍼 필요.
 
 ### Fix Approach
 ```typescript
@@ -320,7 +322,7 @@ if tIsHintRequest:
 ## P2-7: `_detectStuckState` Stage Decrement 미구현
 
 ### 위치
-`backend/app/routers/sessions.py:183-211` (`_detectStuckState`) + `backend/CLAUDE.md:177-183` (docs)
+`backend/app/routers/sessions.py:183-211` (`_detectStuckState`) + `sessions.py:473-478` (**검증 정정: STUCK_DETECTION_INSTRUCTION prepend 라인. Plan 초안 457-478은 부정확**) + `backend/CLAUDE.md:177-183` (docs)
 
 ### 현상
 `backend/CLAUDE.md`가 명시:

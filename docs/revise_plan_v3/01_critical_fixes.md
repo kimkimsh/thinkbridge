@@ -17,10 +17,12 @@ SDK `anthropic==0.34.2`에서 `OverloadedError`는 top-level export에 없음. `
 
 ### 터지는 시나리오
 1. Claude API가 529 Overloaded 반환
-2. Python이 `except anthropic.OverloadedError` 평가 시점에 `AttributeError` 발생
+2. Python이 **런타임 예외 발생 후 `except anthropic.OverloadedError` 절의 속성을 resolve 하려 할 때** `AttributeError` 발생 (import 시점이나 함수 정의 시점이 아님)
 3. 이 `AttributeError`가 `processTurnStreaming` 밖으로 전파
 4. `generateSseEvents`의 bare `except Exception`이 잡고 "스트리밍 중 오류가 발생했습니다" 일반 메시지 반환
 5. **재시도 로직은 절대 실행 안 됨** (catch 지점을 지나지도 못함)
+
+검증 확인: `AttributeError: module 'anthropic' has no attribute 'OverloadedError'` 실제 재현 완료 (Agent 검증, 2026-04-12).
 
 ### Root Cause
 SDK 0.34.2 실제 exception classes:
@@ -31,7 +33,15 @@ ConflictError, InternalServerError, NotFoundError, PermissionDeniedError,
 RateLimitError, UnprocessableEntityError
 ```
 
-`529 Overloaded`는 `APIStatusError(status_code=529)`로 올라옴. `BetaOverloadedError`는 `anthropic.types`에만 존재하며 런타임 예외 클래스가 아님.
+SDK 내부 매핑 (`anthropic/_client.py:317` 근처):
+```python
+if response.status_code >= 500:
+    return InternalServerError(...)
+```
+
+즉 **529는 `InternalServerError` (APIStatusError의 서브클래스)** 로 올라옴. `BetaOverloadedError`는 `anthropic.types`에만 존재하며 런타임 예외 클래스가 아님.
+
+Anthropic 공식 docs (`https://docs.anthropic.com/en/api/errors`) 기준 529 = `overloaded_error` 공식 코드.
 
 ### Fix Approach
 
@@ -42,30 +52,38 @@ RateLimitError, UnprocessableEntityError
 except anthropic.OverloadedError as tError:
     # overload retry logic
 
-# After
-except anthropic.APIStatusError as tError:
-    if tError.status_code == OVERLOAD_STATUS_CODE:
+# After (narrow target — 5xx만 포착, 4xx 영향 없음)
+except anthropic.InternalServerError as tError:
+    tStatus = getattr(tError, 'status_code', None)
+    if tStatus == OVERLOAD_STATUS_CODE:
         # 기존 overload retry 로직 유지
         ...
     else:
-        raise  # 다른 status 에러는 상위로
+        # 기타 5xx (502/503/504)은 즉시 에러 이벤트
+        raise
 ```
 
-추가 constants:
+추가 constants (기존에 `OVERLOAD_RETRY_COUNT = 2`, `OVERLOAD_RETRY_DELAY_SECONDS = 3`은 `ai_engine.py:74-75`에 이미 존재):
 ```python
 OVERLOAD_STATUS_CODE = 529
 RATE_LIMIT_STATUS_CODE = 429
 ```
 
-### P1-1과 연계
-동일 수정 범위에서 `RateLimitError` (429) 재시도 루프도 포함 권장:
+### P1-1과 연계 (RateLimitError 포함)
+429도 동일 retry loop 포함 권장. 현재 `ai_engine.py:385-391`에서는 즉시 에러 반환:
 ```python
-except (anthropic.APIStatusError, anthropic.RateLimitError) as tError:
+except anthropic.InternalServerError as tError:
     tStatus = getattr(tError, 'status_code', None)
-    if tStatus == OVERLOAD_STATUS_CODE or isinstance(tError, anthropic.RateLimitError):
+    if tStatus == OVERLOAD_STATUS_CODE:
         # exponential backoff retry
         ...
+except anthropic.RateLimitError as tError:
+    # 429 — retry-after 헤더 참조 가능
+    # 동일 backoff 정책 적용
+    ...
 ```
+
+**선택 근거**: `APIStatusError` (4xx 부모)보다 `InternalServerError` (5xx 전용)가 더 정확함. AuthenticationError 등 4xx를 잘못 retry하지 않음.
 
 ### 검증 방법
 - 단위 테스트: `anthropic.APIStatusError(message="...", response=mock, body=None)` 주입
@@ -83,7 +101,7 @@ except (anthropic.APIStatusError, anthropic.RateLimitError) as tError:
 ## P0-2: `_saveAiResponseToDb` 침묵 실패 → 클라이언트/DB 괴리
 
 ### 위치
-`backend/app/routers/sessions.py:559-574` (`generateSseEvents` finally 부분) + `sessions.py:641-647` (`_saveAiResponseToDb` except)
+`backend/app/routers/sessions.py:560-574` (`generateSseEvents` finally 부분, 2026-04-12 검증 기준) + `sessions.py:641-647` (`_saveAiResponseToDb` except)
 
 ### 현상
 SSE 스트림이 `event: done`을 클라이언트에 송신 완료 **후** `_saveAiResponseToDb`가 호출됨. 이 시점에 DB 저장이 실패하면:
@@ -107,17 +125,19 @@ except Exception as tSaveError:
 
 ### Fix Approach (최소 변경, 안전)
 
-**Phase 1 — 에러 visibility 개선 (즉시)**
+**Phase 1 — 에러 메시지 승급 + caller에서 포착**
+
+**참고**: `_saveAiResponseToDb`는 이미 L647에 `raise`가 있음 (검증 완료). 문제는 caller(`generateSseEvents`)가 except로 잡아 로그만 찍고 삼키는 것. 따라서 Phase 1은 "re-raise 추가"가 아니라 "**로그 메시지 승급 + caller에서 error event yield**" 순으로 변경:
+
 ```python
-# _saveAiResponseToDb 내
+# _saveAiResponseToDb 내 (로그 승급만)
 except Exception as tSaveError:
     logger.exception(
         "CRITICAL: AI response DB save failed for session %d, turn %d. "
-        "Client-side state may diverge from DB. Error: %s",
-        sessionId, turnNumber, tSaveError,
+        "Client-side state may diverge from DB.",
+        sessionId, turnNumber,
     )
-    # 메트릭 카운터 (Sentry/log scraper 용)
-    raise  # re-raise so caller knows
+    raise  # 기존 raise 유지
 ```
 
 **Phase 2 — generateSseEvents에서 save 실패 포착 후 클라이언트에 알림**
@@ -137,6 +157,8 @@ if not tHasError and tCollectedText:
             }, ensure_ascii=False),
         }
 ```
+
+**프론트 호환성 검증**: `ChatInterface.tsx:313-316`이 이미 server error event 핸들링 (`setErrorMessage`). Plan 초안이 참조한 `319-344`는 catch 블록이고, server error는 313-316 경로. 둘 다 있어서 호환 OK.
 
 **Phase 3 (옵션, 선택적) — 게스트 턴 보상 감소**
 ```python
@@ -178,11 +200,10 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 }
 ```
 
-### 터지는 시나리오
-- `endSession` (PATCH) — 현재는 SessionResponse JSON 반환하지만, 향후 204 No Content로 바뀌면 크래시
-- 프록시/CDN이 일시적으로 빈 응답 리턴 (Render cold start 중간 끊김 등)
-- 5xx 에러 이지만 본문이 JSON 아닌 HTML (Render error page)
-  - 이 경우 `!tResponse.ok` 분기에서 `tResponse.json()`을 호출하는데 역시 크래시 (L109)
+### 터지는 시나리오 (현실성 순)
+- **5xx 에러이면서 본문이 JSON 아닌 HTML** (Render free tier sleeping 시 502/503 HTML 반환) — **가장 현실적**. 이 경우 `!tResponse.ok` 분기의 `tResponse.json()` 호출(L109)에서 크래시
+- 프록시/CDN이 일시적으로 빈 응답 리턴 — 발생 시 fetch 자체가 reject되므로 `.json()` 도달 전 catch 필요
+- ~~`endSession` 204 No Content~~ — 현재 FastAPI가 `response_model=SessionResponse`로 JSON 강제 중이라 **실제 발생 불가**. 향후 API 변경 대비만 의미 있음.
 
 ### Fix Approach
 
@@ -229,7 +250,9 @@ if (!tResponse.ok) {
 - 단위: mock fetch로 `Response("", {status: 200})` 주입
 
 ### 예상 변경량
-**S** (~20-30줄), 1 파일 (`api.ts`)
+**S** (~20-30줄), 1 파일 (`api.ts`), **2 위치 (`apiRequest` + `streamMessages` error path L267)**
+
+`streamMessages` 내부의 에러 응답 파싱(L267)도 동일한 `.json()` 직접 호출 패턴 → 같이 수정.
 
 ### 리스크
 - `apiRequest<T>` 반환 타입이 `T` 에서 `T | null`로 변경됨. TypeScript strict mode에서 모든 호출처 영향. 호출처는 현재 `!== null` 체크 없이 바로 사용 중 (예: `login`, `register`). 따라서 타입을 `T | null`로 바꾸기보단, null-on-empty는 내부 처리하고 caller가 void endpoints를 별도 helper로 호출하도록 분리가 더 안전.

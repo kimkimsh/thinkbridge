@@ -3,20 +3,25 @@
 > 문서가 코드와 다르면 다음 엔지니어가 속음. 제출 AI 리포트 정확도도 훼손.
 > 이 문서 자체는 기능 추가 아님 — 정확성 복구.
 
-## DOC-1: Admin P1 vs P2 상반된 기술 (3개 파일)
+## DOC-1: Admin P1 vs P2 상반된 기술 (검증 정정)
 
-### 위치
-- `docs/revise_plan_v2/review-summary-v2.md:26` — "Admin → P2"
-- `docs/revise_plan_v2/thinkbridge-design-v3.md:13` — Admin P1로 표기
-- `docs/revise_plan_v2/thinkbridge-plan-v3.md:511` — "Admin=P2"
+### 위치 (세분화)
+- `docs/revise_plan_v2/review-summary-v2.md:26` — "Admin을 P2로 강등" (narrative setup, 생각의 흐름)
+- `docs/revise_plan_v2/review-summary-v2.md:37` — 최종 표에서 **P1**로 결정 (standing claim)
+- `docs/revise_plan_v2/thinkbridge-design-v3.md:13` — "Admin 대시보드 → P1 유지"
+- `docs/revise_plan_v2/thinkbridge-plan-v3.md:511` — Risk Matrix에서 "Admin=P2" — **실제 contradiction 이 항목만**
 
-실제 구현은 **P1 완성**: `backend/app/routers/admin.py` + `frontend/src/app/admin/dashboard/page.tsx` 모두 존재, 프로덕션에서 동작 중.
+### 검증 결과
+Plan 초안이 "3파일 상반" 주장했으나 재검증 결과:
+- `review-summary-v2.md:26`은 narrative (생각의 흐름 중)이고 `:37`에서 P1로 결정. **Contradiction 아님**.
+- `design-v3.md:13`은 P1 확인. Contradiction 아님.
+- **실 contradiction은 `thinkbridge-plan-v3.md:511` 하나만**.
 
 ### Fix
-`thinkbridge-plan-v3.md:511`의 "Admin=P2"를 P1으로 수정. `review-summary-v2.md`의 P2 demote 기록을 "reconsidered — Admin remained P1 per final implementation"로 annotation.
+`thinkbridge-plan-v3.md:511`만 P1으로 정정. 다른 두 파일은 이미 올바름, annotation 불필요.
 
 ### 변경량
-**XS** — 3개 파일 각 1-2줄 수정
+**XS** — 1개 파일 1줄 수정
 
 ---
 
@@ -80,12 +85,14 @@ Spec 문서 §4.2에 "SUPERSEDED" 박스 추가:
 
 ---
 
-## DOC-4: `SSEEvent` 타입에 "error" Variant 누락
+## DOC-4: `SSEEvent` 타입에 "error" Variant — 오직 CLAUDE.md drift
 
 ### 위치
-`frontend/CLAUDE.md:385-388`
+`frontend/CLAUDE.md:385-388` (drift 있음)
+`frontend/src/types/index.ts:104-110` (**이미 올바름 — `SSEErrorEvent` + union 정의 완료**)
 
-### 현상
+### 현상 (정정된 버전)
+`CLAUDE.md`의 타입 예시:
 ```typescript
 interface SSEEvent {
     type: "token" | "analysis" | "done";  // "error" 없음
@@ -93,51 +100,43 @@ interface SSEEvent {
 }
 ```
 
-실제 코드 `frontend/src/types/index.ts` 및 `api.ts:225-228`에서 "error" 이벤트를 yield. 백엔드도 `EVENT_TYPE_ERROR`로 송신.
+**검증 정정**: Plan 초안이 "types/index.ts도 missing"이라 주장했으나 **오류**. 실제 `types/index.ts:104-110`은 이미 `SSEErrorEvent` 포함 union 정의 완료. Drift는 **`frontend/CLAUDE.md` 문서만**.
 
 ### 위험
-- 새 엔지니어가 타입 정의만 보고 error 이벤트 처리 누락
-- TypeScript 컴파일러가 error 이벤트를 "unknown" 처리 → 런타임 오류 가능
+- 새 엔지니어가 **문서만** 참조해 error 이벤트 처리 누락 (실제 코드 타입은 올바르므로 TS 컴파일러는 막아줌)
 
 ### Fix
+`frontend/CLAUDE.md:385-388` 예시를 실제 `types/index.ts:104-110` 내용으로 일치시킴:
 ```typescript
 interface SSEEvent {
     type: "token" | "analysis" | "done" | "error";
     data: string | ThoughtAnalysis | Record<string, never> | ErrorEventData;
 }
-
-interface ErrorEventData {
-    message: string;
-    code?: string;  // 선택적: AI_API_ERROR, STREAM_UNEXPECTED 등
-}
 ```
 
-`frontend/CLAUDE.md`의 예시도 맞춰 업데이트.
+또는 더 간단: 문서에서 예시 제거하고 `types/index.ts` 참조만 남김.
 
 ### 변경량
-**S** (~15줄)
+**XS** (~5줄 — 문서 단일 파일)
 
 ---
 
-## DOC-5: `GET /api/auth/me` 문서에 있으나 실제 없음
+## DOC-5: `GET /api/auth/me` 문서에 있으나 실제 없음 (검증 정정)
 
-### 위치
-- 루트 `CLAUDE.md:148` — "POST /api/auth/register, /login, /guest" 다음에 어디선가 `/me` 언급
-- `docs/superpowers/specs/2026-04-06-thinkbridge-design.md:198`
+### 위치 (세분화)
+- ~~루트 `CLAUDE.md:148`~~ — **검증 정정: 해당 라인에 `/me` 언급 없음** (Plan 초안 라인 참조 오류, L148은 seed 계정 관련)
+- `docs/superpowers/specs/2026-04-06-thinkbridge-design.md:198` — **유일한 실제 drift 위치**
+- `docs/superpowers/plans/2026-04-06-thinkbridge.md:938, 1112, 1130, 2511` — 추가로 plan 문서 여러 위치에 언급
 
 ### 현상
-실제 `backend/app/routers/auth.py`에는 register/login/guest 3개 엔드포인트만 존재. `/me`는 구현 안 됨.
-
-### 영향
-- API endpoint 총 개수 16개 표기와 실제 개수 불일치
-- 새 엔지니어가 `/me` 존재한다고 오해
+실제 `backend/app/routers/auth.py`에는 register/login/guest 3개 엔드포인트만 존재. `/me`는 구현 안 됨. 루트 `CLAUDE.md`는 이미 올바름.
 
 ### Fix
-- 루트 `CLAUDE.md`에서 `/me` 언급 제거 (현 3개 endpoint만 기술)
-- `2026-04-06-thinkbridge-design.md` 198번 부근에 "SUPERSEDED: /me endpoint dropped in favor of token-embedded user claims" 메모
+- `specs/2026-04-06-thinkbridge-design.md:198` 부근에 "SUPERSEDED: /me endpoint dropped in favor of token-embedded user claims" 메모
+- 선택: `plans/2026-04-06-thinkbridge.md`의 `/me` 언급들도 같이 정리 (대부분 아카이브 plan이라 선택적)
 
 ### 변경량
-**XS** (~5줄)
+**XS** (~5줄 — specs 1개 파일만 필수)
 
 ---
 
@@ -166,15 +165,16 @@ If engagement_level == "stuck" for 2 consecutive turns:
 
 ---
 
-## DOC-7: Supabase Session Mode Port 5432 Invariant 미문서
+## DOC-7: Supabase Session Mode Port 5432 Invariant 미문서 (부분 정정)
 
 ### 위치
 `backend/CLAUDE.md` 또는 `backend/app/database.py`
 
-### 현상
+### 현상 (검증 정정)
+- `database.py:41-42`에는 "Supabase Session Mode Pooler 호환 설정" 주석 **존재**하나, **port 5432 required 명시 없음 + 6543 사용 시 결과도 없음** → 불완전
+- `backend/CLAUDE.md`에는 Session mode/port 5432 언급 **전혀 없음**
+- 유일한 출처: `work_log/03_deployment.md:44` — "Pooler connection (pooler.supabase.com:6543) 사용" 으로 언급되나 실제로는 나중에 5432로 바뀜 → 이 work_log도 드리프트 의심 (재확인 필요)
 - 사용자가 DATABASE_URL을 port 6543 (Transaction mode)으로 바꾸면 prepared statement 캐시 충돌로 배포 실패
-- 이 invariant는 `work_log/03_deployment.md` Issue 3에만 기록됨
-- 새 환경 배포 시 중대 실수 가능
 
 ### Fix
 
