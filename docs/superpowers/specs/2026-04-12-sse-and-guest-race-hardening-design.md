@@ -1,7 +1,7 @@
 # SSE 최종 이벤트 Flush + Guest 5턴 Race Condition 방어 설계
 
 > **Date**: 2026-04-12
-> **Status**: Draft (사용자 승인 대기)
+> **Status**: Approved (사용자가 검토를 위임하여 simulator agent + self-review로 교차 검증, 2026-04-12)
 > **Deadline**: 2026-04-13 (D-1)
 > **Scope**: 2개 파일, 약 20줄 수정
 > **Option 선택**: B (Targeted Minimal Fix) — A/B/C 중 사용자 확정
@@ -207,12 +207,15 @@ tSession = tResult.scalar_one_or_none()
 
 ### 5.2 Fix #5 검증
 
-**자동화 스크립트** (`backend/tests/test_guest_race.py` 신규, 제출 후 제거 가능):
+**자동화 스크립트** (`backend/tests/test_guest_race.py` 신규, 제출 후 제거 가능). `backend/tests/` 디렉토리는 이미 존재(`test_api_scenarios.py`)하고, `httpx==0.27.2`는 `requirements.txt:11`에 포함됨:
 ```python
 import asyncio
+import os
+
 import httpx
 
-API_URL = "https://<backend>.onrender.com"
+DEFAULT_API_URL = "https://thinkbridge-api.onrender.com"
+API_URL = os.getenv("THINKBRIDGE_API_URL", DEFAULT_API_URL)
 CONCURRENT_REQUESTS = 10
 GUEST_MAX_TURNS = 5
 EXPECTED_SUCCESS_COUNT = GUEST_MAX_TURNS
@@ -290,9 +293,21 @@ if __name__ == "__main__":
 - [ ] `frontend/.next` 빌드 확인 (`npm run build`)
 - [ ] Vercel deploy 시 환경변수 변경 없음 확인
 
-## 6. 롤백 계획
+## 6. 롤백 계획 및 커밋 전략
 
 두 수정 모두 독립 커밋으로 분리하여 개별 롤백 가능.
+
+### 제안 커밋 메시지 (Conventional Commits — 최근 git log 스타일 일치)
+
+```
+fix(sse): flush final event when stream ends without boundary
+fix(sessions): lock guest session row to enforce 5-turn limit under concurrency
+test: add asyncio race reproducer for guest turn limit   # optional
+```
+
+최근 프로젝트 커밋 voice는 영문 subject + 동사로 시작 (`e.g. "fix: handle Claude API overloaded error with retry"`).
+
+### 롤백 명령
 
 ```bash
 # 단일 수정 롤백
@@ -314,7 +329,7 @@ Render/Vercel은 이전 빌드 자동 재배포 가능 (Rollback 버튼).
 - [ ] Fix #5의 `with_for_update()`가 Supabase Session mode에서 정상 취득·해제되는지 서버 로그 확인
 - [ ] `asyncio.gather` 기반 race 재현 스크립트 통과
 - [ ] 두 수정이 별도 커밋으로 분리되어 있음
-- [ ] 구현 완료 후 `docs/work_log/` 에 작업 로그 엔트리 작성 (프로젝트 CLAUDE.md Work Log Policy 준수)
+- [ ] 구현 완료 후 `docs/work_log/09_sse_and_race_hardening.md` 작성 (다음 순번, 프로젝트 CLAUDE.md Work Log Policy 준수)
 
 ## 8. 참고 자료
 
