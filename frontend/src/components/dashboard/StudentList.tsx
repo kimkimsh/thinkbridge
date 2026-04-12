@@ -75,7 +75,11 @@ export function StudentList({ students }: StudentListProps)
                     <Card
                         key={student.id}
                         className="cursor-pointer transition-shadow hover:shadow-md"
-                        onClick={() => router.push(`/instructor/replay/${student.id}`)}
+                        onClick={() =>
+                            router.push(
+                                `/instructor/replay/${student.id}?name=${encodeURIComponent(student.name)}`,
+                            )
+                        }
                     >
                         <CardContent className="flex items-center justify-between p-4">
                             <div className="flex items-center gap-3">

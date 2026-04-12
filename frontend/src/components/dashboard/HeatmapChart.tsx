@@ -104,7 +104,11 @@ export function HeatmapChart({ data }: HeatmapChartProps)
                                 <tr
                                     key={entry.studentId}
                                     className="cursor-pointer transition-colors hover:bg-gray-50"
-                                    onClick={() => router.push(`/instructor/replay/${entry.studentId}`)}
+                                    onClick={() =>
+                                        router.push(
+                                            `/instructor/replay/${entry.studentId}?name=${encodeURIComponent(entry.studentName)}`,
+                                        )
+                                    }
                                 >
                                     <td className="sticky left-0 z-10 bg-white px-3 py-2 font-medium text-gray-900 hover:text-blue-600">
                                         {entry.studentName}

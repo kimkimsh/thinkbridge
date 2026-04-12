@@ -10,8 +10,8 @@
  * then loads session detail for the selected session.
  */
 
-import { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { getStudentGrowth, getSessionDetail } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ThoughtPanel } from "@/components/chat/ThoughtPanel";
-import { ArrowLeft, BookOpen, Calendar } from "lucide-react";
+import { ArrowLeft, BookOpen, Calendar, User } from "lucide-react";
 import { SUBJECT_LABELS } from "@/lib/constants";
 import type {
     SessionDetail,
@@ -40,14 +40,27 @@ const ERROR_LOAD_SESSIONS = "세션 목록을 불러올 수 없습니다.";
 const ERROR_LOAD_DETAIL = "세션 상세를 불러올 수 없습니다.";
 const NO_MESSAGES_TEXT = "이 세션에 메시지가 없습니다.";
 
+/** Fallback label when the `name` query param is missing or empty */
+const UNKNOWN_STUDENT_LABEL = "학생";
 
-// --- Component ---
+/** Suspense fallback placeholder text */
+const SUSPENSE_FALLBACK_TEXT = "로딩 중...";
 
-export default function InstructorReplayPage()
+
+// --- Inner Component (uses useSearchParams) ---
+
+function InstructorReplayPageInner()
 {
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { token } = useAuth();
+
+    // 대시보드 네비게이션에서 전달된 학생 이름 (누락 또는 빈 문자열이면 fallback)
+    const tNameParam = searchParams.get("name");
+    const tStudentName = tNameParam && tNameParam.length > 0
+        ? tNameParam
+        : UNKNOWN_STUDENT_LABEL;
 
     // Route param is student ID (named sessionId in the route structure)
     const mStudentId = Number(params.sessionId);
@@ -205,21 +218,47 @@ export default function InstructorReplayPage()
         );
     }
 
+    // 헤더에 표시할 과목 레이블 (알려진 과목이면 한국어, 아니면 raw 값)
+    const tSubjectLabel = mSessionDetail
+        ? (SUBJECT_LABELS[mSessionDetail.subject] ?? mSessionDetail.subject)
+        : null;
+
     return (
         <div className="flex h-[calc(100vh-3.5rem)] flex-col p-4 lg:p-6">
-            {/* 헤더: 뒤로 가기 + 제목 */}
-            <div className="mb-4 flex items-center gap-3">
+            {/* 헤더: 제목 + 학생/세션 메타 + 뒤로 가기 */}
+            <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                    <h1 className="text-2xl font-bold text-gray-900">
+                        {PAGE_TITLE}
+                    </h1>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-500">
+                        <User className="h-4 w-4 shrink-0" />
+                        <span className="font-medium text-gray-700">
+                            {tStudentName}
+                        </span>
+                        {mSessionDetail && (
+                            <>
+                                <span>·</span>
+                                <span>{tSubjectLabel}</span>
+                                <span>·</span>
+                                <span className="truncate max-w-xs">
+                                    {mSessionDetail.topic}
+                                </span>
+                                <span>·</span>
+                                <span>세션 #{mSessionDetail.id}</span>
+                            </>
+                        )}
+                    </div>
+                </div>
                 <Button
                     variant="ghost"
                     size="sm"
+                    className="shrink-0"
                     onClick={() => router.push("/instructor/dashboard")}
                 >
                     <ArrowLeft className="mr-1 h-4 w-4" />
                     {BACK_BUTTON_LABEL}
                 </Button>
-                <h1 className="text-lg font-bold text-gray-900">
-                    {PAGE_TITLE}
-                </h1>
             </div>
 
             {/* 에러 메시지 */}
@@ -373,5 +412,40 @@ export default function InstructorReplayPage()
                 </div>
             </div>
         </div>
+    );
+}
+
+
+// --- Suspense Fallback ---
+
+/**
+ * 세션 리플레이 페이지 렌더 전 searchParams 바인딩을 위한 스켈레톤.
+ * student/chat/page.tsx의 SUSPENSE 패턴을 참조한다.
+ */
+function InstructorReplayPageSkeleton()
+{
+    return (
+        <div className="min-h-screen flex items-center justify-center">
+            <div className="animate-pulse text-gray-500">
+                {SUSPENSE_FALLBACK_TEXT}
+            </div>
+        </div>
+    );
+}
+
+
+// --- Default Export (Suspense wrapper) ---
+
+/**
+ * Next.js 14 요구사항: useSearchParams를 사용하는 클라이언트
+ * 컴포넌트는 반드시 Suspense 경계로 감싸야 빌드 시
+ * CSR 바인딩 오류를 방지할 수 있다.
+ */
+export default function InstructorReplayPage()
+{
+    return (
+        <Suspense fallback={<InstructorReplayPageSkeleton />}>
+            <InstructorReplayPageInner />
+        </Suspense>
     );
 }
