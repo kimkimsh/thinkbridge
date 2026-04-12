@@ -106,6 +106,68 @@
 
 - 로컬 backend 로그에서 `module 'anthropic' has no attribute 'OverloadedError'` 발견. SSE 스트리밍 에러 핸들러가 존재하지 않는 SDK 속성을 참조. 별도 이슈로 추적 필요 (오늘 변경과 무관).
 
+## Fix #5 CAS 재설계 (post-FAIL recovery)
+
+커밋 `e1db1c5` — `fix(sessions): replace FOR UPDATE with atomic UPDATE for guest turn limit`.
+
+### 왜 재설계가 필요했나
+
+커밋 `9148208`의 `SELECT ... FOR UPDATE` 접근은 이론상 완벽했지만 실측에서 실패함. 위 "프로덕션 smoke test (post-deploy)" 섹션에서 확인:
+- 10 concurrent 요청 → `200: 6, 403: 0` (lock 미작동)
+- 2 concurrent diagnostic → 둘 다 200, 병렬 ~11s (직렬화 실패 증거)
+- 순차 7 요청 → `5×200 + 2×403` (sequential 로직 정상)
+
+근본 원인 후보: SQLAlchemy async `autobegin` + NullPool + Supabase Pooler 환경에서 lock 경계가 예상대로 유지되지 않음. 트랜잭션 primitive에 의존한 접근은 이 환경에서 근본적으로 신뢰 불가.
+
+### CAS 패턴 대체
+
+```sql
+UPDATE tutoring_sessions
+SET "mTotalTurns" = "mTotalTurns" + 1
+WHERE "mId" = :sessionId
+  AND "mTotalTurns" < 5
+RETURNING "mTotalTurns";
+```
+
+속성:
+- **Pooling mode 무관**: Session/Transaction mode 어느 쪽이든 동일하게 동작.
+- **트랜잭션 경계 무관**: 단일 statement라 autobegin·autocommit 동작에 영향 받지 않음.
+- **Lock-free**: 명시적 row lock 불필요. Postgres가 UPDATE 처리 중 자동으로 row-level lock을 acquire/release.
+- **원자성**: WHERE 조건 평가 + SET 적용 + RETURNING 이 하나의 트랜잭션 단위로 실행.
+- **0 rows matched = 한도 도달**: `scalar_one_or_none()` None 반환 → 403.
+
+### 구현 변경 요약 (`backend/app/routers/sessions.py`)
+
+1. Import: `from sqlalchemy import select, update` (`update` 추가)
+2. L368-385: `with_for_update()` 조건부 block을 단순 SELECT로 revert
+3. L404-451: 제어 흐름 재정렬
+   - Before: guest turn 체크(sequential) → content 검증 → 저장
+   - After: content 검증 → guest CAS atomic 증가 → 저장
+4. 비게스트 경로: 기존 ORM increment 패턴 유지 (원자성 불필요)
+
+### 프로덕션 검증 (post-redeploy)
+
+```
+200: 5, 403: 1, raw: [200, 200, 200, 200, 200, 403]
+PASS: Guest 5-turn limit correctly enforced under concurrency
+EXIT=0
+```
+
+- Race script: CONCURRENT_REQUESTS=6 (patch `5e04f80` 기준) → 정확한 5+1 분포.
+- Response 시간: 403은 ~100ms (즉시), 200은 정상 SSE 스트림.
+- Render backend `/health`: HTTP 200, time ~0.6s.
+
+**Fix #5 최종 상태: PASS** (FOR UPDATE → CAS 경로로 resolved).
+
+### 교차 검증 (2회 추가)
+
+- **Spec 리뷰 (Task 9)**: ✅ 변경사항이 설계 의도와 정확히 일치. 커밋 메시지 body도 rowcount/returning/pooling-mode 이유 정확히 기술.
+- **Code quality 리뷰 (Task 9)**: ✅ APPROVED. 3건 non-blocker observation 제시:
+  1. CAS 이후 `tSession.mTotalTurns` ORM 인메모리 stale (downstream 코드에서 참조 안 하므로 behavior 영향 없음).
+  2. 403 시 rollback은 `get_db`의 `session.close()` implicit rollback에 의존 (정상 동작하나 implicit).
+  3. 단계 주석 번호 `# 4.` 중복 (L443, L453). Cosmetic.
+  — 전부 post-submission polish 후보로 문서화.
+
 ## 교훈
 
 - `selectinload`가 과거 선택이었기에 오늘 `FOR UPDATE`가 가능했다. 초기 설계의 유연성이 D-1 hardening을 가능케 함.
