@@ -175,12 +175,11 @@ async def process_turn_streaming(session_history, user_message, subject, is_gues
 ```
 
 ### Stuck Detection
-```python
-# If engagement_level == "stuck" for 2 consecutive turns:
-#   → Force socratic_stage down by 1
-#   → Add "more concrete hint" instruction to next prompt
-# This is backend logic, not dependent on AI judgment alone
-```
+If engagement_level == "stuck" for 2 consecutive turns (detected via `_detectStuckState`):
+  → Prepend STUCK_DETECTION_INSTRUCTION to the next user prompt sent to Claude
+  → Claude re-interprets context and provides more concrete hint
+  (Stage value is NOT forcibly decremented — relies on Claude's judgment after the instruction)
+This is backend logic in `sessions.py:473-478`, not dependent on AI tool output alone.
 
 ### History Windowing
 ```python
@@ -284,6 +283,14 @@ async def send_message(session_id: int, message: MessageCreate, user: User):
 - Web Service, Docker deployment
 - Environment variables: DATABASE_URL, ANTHROPIC_API_KEY, SECRET_KEY, CORS_ORIGINS
 - **UptimeRobot**: 5-min ping on `/health` to prevent cold start (Render free tier sleeps after 15min)
+
+### Supabase Pooler Configuration (CRITICAL)
+- **DATABASE_URL must use port 5432** (Session mode pooler)
+- Transaction mode (port 6543) causes:
+  - asyncpg prepared statement cache collisions
+  - Broken SELECT FOR UPDATE semantics
+  - Silent data inconsistency under concurrency
+- See `docs/work_log/03_deployment.md` Issue 3 for incident history
 
 ### Health Endpoint
 ```python

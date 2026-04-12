@@ -13,6 +13,13 @@ from sqlalchemy.pool import NullPool
 from app.config import settings
 
 
+# ============================================================================
+# CRITICAL: Supabase DATABASE_URL MUST use Session mode (port 5432)
+# Transaction mode (port 6543) breaks asyncpg's prepared statement cache
+# and silently destroys FOR UPDATE semantics.
+# History: docs/work_log/03_deployment.md Issue 3.
+# ============================================================================
+
 # Supabase PostgreSQL 비동기 엔진 생성
 # Convert postgres:// or postgresql:// to postgresql+asyncpg:// for SQLAlchemy async support
 def _buildAsyncDatabaseUrl(databaseUrl: str) -> str:
