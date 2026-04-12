@@ -29,6 +29,7 @@ import {
     getSessionReport,
     getSessionDetail,
     getStudentGrowth,
+    normalizeErrorMessage,
 } from "@/lib/api";
 import { SUBJECT_LABELS, DIMENSION_KEYS } from "@/lib/constants";
 import type {
@@ -57,6 +58,34 @@ const SUBJECT_ICONS: Record<string, React.ElementType> = {
     science: FlaskConical,
     essay: PenLine,
 };
+
+
+// --- Report Retry Constants ---
+
+/**
+ * 최대 재시도 횟수.
+ * endSession 직후 백엔드에서 리포트 생성이 진행 중일 수 있어 /api/reports/session/{id} 가
+ * 404 (REPORT_NOT_READY_DETAIL) 를 반환할 수 있다. 이를 에러로 바로 노출하지 않고
+ * 짧은 간격으로 재시도하여 "분석 중" 안내를 보여준다.
+ */
+const REPORT_RETRY_ATTEMPTS = 5;
+
+/** 각 재시도 사이의 대기 시간 (ms) */
+const REPORT_RETRY_INTERVAL_MS = 2000;
+
+/** 리포트 로드 실패 시 기본 사용자 메시지 */
+const REPORT_LOAD_FAILED_MESSAGE = "리포트를 불러오지 못했습니다.";
+
+/** 404 detail 텍스트에서 "아직 준비되지 않음" 케이스 매칭에 사용하는 부분 문자열 */
+const NOT_READY_MARKER_JSON = "아직 준비";
+const NOT_READY_MARKER_HEADER = "리포트가 아직";
+const NOT_READY_MARKER_STATUS = "HTTP 404";
+
+/** 재시도 진행 중 오버레이에 표시할 메시지 템플릿 */
+function buildGeneratingMessage(currentAttempt: number, totalAttempts: number): string
+{
+    return `사고 과정을 분석하고 있어요... (${currentAttempt}/${totalAttempts})`;
+}
 
 
 // --- Helper ---
@@ -187,6 +216,9 @@ export default function StudentReportPage()
     const [mGrowthData, setGrowthData] = useState<GrowthTrendEntry[]>([]);
     const [mIsLoading, setIsLoading] = useState(true);
     const [mError, setError] = useState<string | null>(null);
+    // 리포트 생성이 아직 완료되지 않아 재시도 중일 때 스켈레톤 위에 띄우는 진행 메시지.
+    // null 이면 평범한 스켈레톤만 노출.
+    const [mGeneratingMessage, setGeneratingMessage] = useState<string | null>(null);
 
     const params = useParams();
     const router = useRouter();
@@ -213,37 +245,75 @@ export default function StudentReportPage()
 
         let tIsCancelled = false;
 
+        /**
+         * 리포트 + 세션 상세 + 성장 추세 병렬 로드.
+         * 백엔드에서 endSession 직후 아직 리포트 생성이 완료되지 않았다면
+         * 404 (REPORT_NOT_READY_DETAIL) 가 반환되므로,
+         * 짧은 간격으로 REPORT_RETRY_ATTEMPTS 회까지 재시도하며
+         * 사용자에게는 "분석 중..." 진행 메시지를 보여준다.
+         */
         async function loadReportData()
         {
-            try
+            for (let tAttempt = 0; tAttempt < REPORT_RETRY_ATTEMPTS; tAttempt++)
             {
-                // 병렬로 3개 API 호출
-                const [tReport, tDetail, tGrowth] = await Promise.all([
-                    getSessionReport(tSessionId, token!),
-                    getSessionDetail(tSessionId, token!),
-                    getStudentGrowth(user!.id, token!),
-                ]);
+                if (tIsCancelled)
+                {
+                    return;
+                }
 
-                if (!tIsCancelled)
+                try
                 {
-                    setReport(tReport);
-                    setSessionDetail(tDetail);
-                    setGrowthData(tGrowth);
+                    // 병렬로 3개 API 호출
+                    const [tReport, tDetail, tGrowth] = await Promise.all([
+                        getSessionReport(tSessionId, token!),
+                        getSessionDetail(tSessionId, token!),
+                        getStudentGrowth(user!.id, token!),
+                    ]);
+
+                    if (!tIsCancelled)
+                    {
+                        setReport(tReport);
+                        setSessionDetail(tDetail);
+                        setGrowthData(tGrowth);
+                        setGeneratingMessage(null);
+                        setIsLoading(false);
+                    }
+                    return;
                 }
-            }
-            catch (error)
-            {
-                if (!tIsCancelled)
+                catch (tError)
                 {
-                    const tMsg = error instanceof Error ? error.message : "리포트를 불러오지 못했습니다.";
-                    setError(tMsg);
-                }
-            }
-            finally
-            {
-                if (!tIsCancelled)
-                {
+                    if (tIsCancelled)
+                    {
+                        return;
+                    }
+
+                    // "아직 준비되지 않음" 시그널 판별:
+                    // - JSON detail 에 포함된 한국어 문구
+                    // - apiRequest fallback 메시지 "HTTP 404"
+                    const tRaw = tError instanceof Error ? tError.message : String(tError);
+                    const tIsNotReady =
+                        tRaw.includes(NOT_READY_MARKER_JSON)
+                        || tRaw.includes(NOT_READY_MARKER_HEADER)
+                        || tRaw.includes(NOT_READY_MARKER_STATUS);
+
+                    const tHasMoreAttempts = tAttempt < REPORT_RETRY_ATTEMPTS - 1;
+
+                    if (tIsNotReady && tHasMoreAttempts)
+                    {
+                        setGeneratingMessage(
+                            buildGeneratingMessage(tAttempt + 1, REPORT_RETRY_ATTEMPTS),
+                        );
+                        await new Promise((tResolve) =>
+                            setTimeout(tResolve, REPORT_RETRY_INTERVAL_MS),
+                        );
+                        continue;
+                    }
+
+                    // 재시도 소진 or not-ready 이외의 실제 에러 — 사용자에게 노출
+                    setError(normalizeErrorMessage(tError) || REPORT_LOAD_FAILED_MESSAGE);
+                    setGeneratingMessage(null);
                     setIsLoading(false);
+                    return;
                 }
             }
         }
@@ -257,9 +327,30 @@ export default function StudentReportPage()
     }, [token, user, tSessionId]);
 
     // --- Loading state ---
+    // 재시도 중일 때는 스켈레톤 위에 "분석 중" 오버레이를 띄워
+    // 단순 에러 박스 대신 진행감 있는 피드백을 제공한다.
     if (mIsLoading)
     {
-        return <ReportSkeleton />;
+        return (
+            <div className="relative">
+                <ReportSkeleton />
+                {mGeneratingMessage && (
+                    <div
+                        className="absolute inset-0 flex flex-col items-center justify-center rounded-lg bg-white/80 backdrop-blur-sm"
+                        role="status"
+                        aria-live="polite"
+                    >
+                        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+                        <p className="mt-3 text-sm font-medium text-gray-700">
+                            {mGeneratingMessage}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500">
+                            잠시만 기다려 주세요
+                        </p>
+                    </div>
+                )}
+            </div>
+        );
     }
 
     // --- Error state ---
