@@ -62,6 +62,19 @@ export const TUTORIAL_SCROLL_STABILIZE_MS = 150;
 export const TUTORIAL_FOCUS_RESTORE_MS = 50;
 
 
+// --- Viewport edge clamping ---
+
+/** Minimum margin (px) between tooltip and any viewport edge — prevents flush-against-edge appearance. */
+export const TUTORIAL_VIEWPORT_MARGIN_PX = 12;
+
+/** Minimum free space (px) required on preferred placement side before we auto-flip to opposite. */
+export const TUTORIAL_FLIP_MIN_SPACE_PX = 40;
+
+/** Tooltip dimension estimate (px) used for the first paint before real measurement arrives. */
+export const TUTORIAL_TOOLTIP_ESTIMATED_HEIGHT_PX = 200;
+export const TUTORIAL_TOOLTIP_ESTIMATED_WIDTH_PX = 360;
+
+
 // --- Button labels (Korean user-facing) ---
 
 export const TUTORIAL_BTN_NEXT = "다음";

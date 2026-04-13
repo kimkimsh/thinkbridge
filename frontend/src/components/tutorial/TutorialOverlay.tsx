@@ -20,6 +20,7 @@
 import { createPortal } from "react-dom";
 import {
     useEffect,
+    useLayoutEffect,
     useRef,
     useState,
     useCallback,
@@ -44,6 +45,10 @@ import {
     TUTORIAL_BTN_SKIP,
     TUTORIAL_BTN_FINISH,
     TUTORIAL_BTN_CLOSE_ARIA,
+    TUTORIAL_VIEWPORT_MARGIN_PX,
+    TUTORIAL_FLIP_MIN_SPACE_PX,
+    TUTORIAL_TOOLTIP_ESTIMATED_HEIGHT_PX,
+    TUTORIAL_TOOLTIP_ESTIMATED_WIDTH_PX,
 } from "@/lib/tutorialConstants";
 
 
@@ -72,6 +77,14 @@ interface Rect
     height: number;
 }
 
+interface Size
+{
+    width: number;
+    height: number;
+}
+
+type Placement = "top" | "bottom" | "left" | "right" | "center";
+
 
 // --- Component ---
 
@@ -90,7 +103,13 @@ export function TutorialOverlay()
     const [mTargetRect, setTargetRect] = useState<Rect | null>(null);
     const [mIsMobile, setIsMobile] = useState<boolean>(false);
     const [mMounted, setMounted] = useState<boolean>(false);
+    const [mTooltipSize, setTooltipSize] = useState<Size | null>(null);
+    const [mViewport, setViewport] = useState<Size>({
+        width: TUTORIAL_TOOLTIP_ESTIMATED_WIDTH_PX,
+        height: TUTORIAL_TOOLTIP_ESTIMATED_HEIGHT_PX,
+    });
     const mRafRef = useRef<number | null>(null);
+    const mTooltipRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() =>
     {
@@ -112,6 +131,22 @@ export function TutorialOverlay()
         }
         tMediaQuery.addEventListener("change", handleMediaChange);
         return () => tMediaQuery.removeEventListener("change", handleMediaChange);
+    }, []);
+
+    // --- Viewport size tracking (for clamping tooltip within visible area) ---
+    useEffect(() =>
+    {
+        if (typeof window === "undefined")
+        {
+            return;
+        }
+        function syncViewportSize()
+        {
+            setViewport({ width: window.innerWidth, height: window.innerHeight });
+        }
+        syncViewportSize();
+        window.addEventListener("resize", syncViewportSize);
+        return () => window.removeEventListener("resize", syncViewportSize);
     }, []);
 
     // Compute padded rect from the target element using the current step's override (if any).
@@ -248,6 +283,24 @@ export function TutorialOverlay()
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [activeTutorialId, nextStep, prevStep, skipTutorial]);
 
+    // --- Tooltip size measurement ---
+    // Runs after each render (before paint) so auto-flip/clamp can react to the
+    // measured size on the next render. Only sets state when the size actually
+    // changes, so we get at most one extra render per step or viewport change.
+    useLayoutEffect(() =>
+    {
+        if (!mTooltipRef.current)
+        {
+            return;
+        }
+        const tRect = mTooltipRef.current.getBoundingClientRect();
+        const tNext: Size = { width: tRect.width, height: tRect.height };
+        if (!mTooltipSize || mTooltipSize.width !== tNext.width || mTooltipSize.height !== tNext.height)
+        {
+            setTooltipSize(tNext);
+        }
+    }, [mTooltipSize, currentStepIndex, activeTutorialId, mViewport]);
+
     // Portal target only exists after mount — and we need an active step to render.
     if (!mMounted || !activeTutorialId || !currentStep)
     {
@@ -262,6 +315,8 @@ export function TutorialOverlay()
         targetRect: mTargetRect,
         placement: currentStep.placement ?? "bottom",
         offset: currentStep.offset ?? TUTORIAL_TOOLTIP_OFFSET_PX,
+        viewport: mViewport,
+        tooltipSize: mTooltipSize,
     });
 
     return createPortal(
@@ -308,6 +363,7 @@ export function TutorialOverlay()
 
             {/* Tooltip card */}
             <div
+                ref={mTooltipRef}
                 className="rounded-xl border border-gray-200 bg-white p-5 shadow-2xl"
                 style={tTooltipStyle}
             >
@@ -375,23 +431,108 @@ interface TooltipStyleInput
 {
     shouldCenter: boolean;
     targetRect: Rect | null;
-    placement: "top" | "bottom" | "left" | "right" | "center";
+    placement: Placement;
     offset: number;
+    viewport: Size;
+    tooltipSize: Size | null;
 }
 
 /**
- * Compute the absolute position style for the tooltip card given the target rect and
- * placement. Centered mode ignores the rect and pins to viewport center.
+ * Clamp a numeric position into [min, max] range. If the available range is inverted
+ * (min > max, e.g., tooltip larger than viewport), returns min — better to overflow
+ * consistently on one side than to produce NaN / nonsensical values.
+ */
+function clampToRange(value: number, min: number, max: number): number
+{
+    if (max < min)
+    {
+        return min;
+    }
+    if (value < min)
+    {
+        return min;
+    }
+    if (value > max)
+    {
+        return max;
+    }
+    return value;
+}
+
+/**
+ * Decide whether to flip a horizontal placement (left ↔ right) given the available
+ * space on each side. Flips only when the preferred side has less than
+ * TUTORIAL_FLIP_MIN_SPACE_PX room AND the opposite side has more room.
+ */
+function resolveHorizontalPlacement(
+    preferred: "left" | "right",
+    targetRect: Rect,
+    viewport: Size,
+    tooltipWidth: number,
+    offset: number,
+): "left" | "right"
+{
+    const tSpaceLeft = targetRect.left - offset;
+    const tSpaceRight = viewport.width - (targetRect.left + targetRect.width) - offset;
+    if (preferred === "right" && tSpaceRight < tooltipWidth + TUTORIAL_FLIP_MIN_SPACE_PX && tSpaceLeft > tSpaceRight)
+    {
+        return "left";
+    }
+    if (preferred === "left" && tSpaceLeft < tooltipWidth + TUTORIAL_FLIP_MIN_SPACE_PX && tSpaceRight > tSpaceLeft)
+    {
+        return "right";
+    }
+    return preferred;
+}
+
+/**
+ * Decide whether to flip a vertical placement (top ↔ bottom) given the available
+ * space on each side, using the same logic as the horizontal case.
+ */
+function resolveVerticalPlacement(
+    preferred: "top" | "bottom",
+    targetRect: Rect,
+    viewport: Size,
+    tooltipHeight: number,
+    offset: number,
+): "top" | "bottom"
+{
+    const tSpaceTop = targetRect.top - offset;
+    const tSpaceBottom = viewport.height - (targetRect.top + targetRect.height) - offset;
+    if (preferred === "bottom" && tSpaceBottom < tooltipHeight + TUTORIAL_FLIP_MIN_SPACE_PX && tSpaceTop > tSpaceBottom)
+    {
+        return "top";
+    }
+    if (preferred === "top" && tSpaceTop < tooltipHeight + TUTORIAL_FLIP_MIN_SPACE_PX && tSpaceBottom > tSpaceTop)
+    {
+        return "bottom";
+    }
+    return preferred;
+}
+
+/**
+ * Compute the absolute position style for the tooltip card.
+ *
+ * Uses concrete `top`/`left` coordinates instead of Tailwind transforms so that
+ * viewport-edge clamping can be applied after auto-flip. Falls back to estimated
+ * tooltip dimensions on the first paint before useLayoutEffect measures the real size.
  */
 function computeTooltipStyle(input: TooltipStyleInput): CSSProperties
 {
+    const tTooltipWidth = input.tooltipSize?.width ?? TUTORIAL_TOOLTIP_ESTIMATED_WIDTH_PX;
+    const tTooltipHeight = input.tooltipSize?.height ?? TUTORIAL_TOOLTIP_ESTIMATED_HEIGHT_PX;
+    const tMargin = TUTORIAL_VIEWPORT_MARGIN_PX;
+    const tViewport = input.viewport;
+
+    // Centered fallback (no target / explicit center / mobile).
     if (input.shouldCenter || !input.targetRect)
     {
+        const tCenteredLeft = (tViewport.width - tTooltipWidth) / 2;
+        const tCenteredTop = (tViewport.height - tTooltipHeight) / 2;
         return {
             position: "fixed",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
+            top: clampToRange(tCenteredTop, tMargin, tViewport.height - tTooltipHeight - tMargin),
+            left: clampToRange(tCenteredLeft, tMargin, tViewport.width - tTooltipWidth - tMargin),
             maxWidth: TUTORIAL_TOOLTIP_MAX_WIDTH_PX,
         };
     }
@@ -399,42 +540,50 @@ function computeTooltipStyle(input: TooltipStyleInput): CSSProperties
     const tRect = input.targetRect;
     const tOffset = input.offset;
 
-    if (input.placement === "bottom")
+    // Resolve possibly-flipped placement based on available space.
+    let tResolved: Placement = input.placement;
+    if (input.placement === "left" || input.placement === "right")
     {
-        return {
-            position: "fixed",
-            top: tRect.top + tRect.height + tOffset,
-            left: tRect.left + tRect.width / 2,
-            transform: "translateX(-50%)",
-            maxWidth: TUTORIAL_TOOLTIP_MAX_WIDTH_PX,
-        };
+        tResolved = resolveHorizontalPlacement(input.placement, tRect, tViewport, tTooltipWidth, tOffset);
     }
-    if (input.placement === "top")
+    else if (input.placement === "top" || input.placement === "bottom")
     {
-        return {
-            position: "fixed",
-            bottom: window.innerHeight - tRect.top + tOffset,
-            left: tRect.left + tRect.width / 2,
-            transform: "translateX(-50%)",
-            maxWidth: TUTORIAL_TOOLTIP_MAX_WIDTH_PX,
-        };
+        tResolved = resolveVerticalPlacement(input.placement, tRect, tViewport, tTooltipHeight, tOffset);
     }
-    if (input.placement === "left")
+
+    // Compute raw coordinates for the resolved placement using explicit top/left.
+    let tLeft = 0;
+    let tTop = 0;
+
+    if (tResolved === "bottom")
     {
-        return {
-            position: "fixed",
-            top: tRect.top + tRect.height / 2,
-            right: window.innerWidth - tRect.left + tOffset,
-            transform: "translateY(-50%)",
-            maxWidth: TUTORIAL_TOOLTIP_MAX_WIDTH_PX,
-        };
+        tTop = tRect.top + tRect.height + tOffset;
+        tLeft = tRect.left + tRect.width / 2 - tTooltipWidth / 2;
     }
-    // right
+    else if (tResolved === "top")
+    {
+        tTop = tRect.top - tOffset - tTooltipHeight;
+        tLeft = tRect.left + tRect.width / 2 - tTooltipWidth / 2;
+    }
+    else if (tResolved === "left")
+    {
+        tTop = tRect.top + tRect.height / 2 - tTooltipHeight / 2;
+        tLeft = tRect.left - tOffset - tTooltipWidth;
+    }
+    else if (tResolved === "right")
+    {
+        tTop = tRect.top + tRect.height / 2 - tTooltipHeight / 2;
+        tLeft = tRect.left + tRect.width + tOffset;
+    }
+
+    // Clamp within viewport so tooltip never clips off-screen.
+    const tClampedLeft = clampToRange(tLeft, tMargin, tViewport.width - tTooltipWidth - tMargin);
+    const tClampedTop = clampToRange(tTop, tMargin, tViewport.height - tTooltipHeight - tMargin);
+
     return {
         position: "fixed",
-        top: tRect.top + tRect.height / 2,
-        left: tRect.left + tRect.width + tOffset,
-        transform: "translateY(-50%)",
+        top: tClampedTop,
+        left: tClampedLeft,
         maxWidth: TUTORIAL_TOOLTIP_MAX_WIDTH_PX,
     };
 }
